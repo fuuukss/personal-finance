@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# Next.js output
+.next/
+out/
+
+# local environment and secrets
+.env
+.env.*
+!.env.example
+
+# test and coverage output
+coverage/
+playwright-report/
+test-results/
+
+# local Supabase state and database exports
+supabase/.branches/
+supabase/.temp/
+*.dump
+*.sql.gz
+backups/
+exports/
+
+# local tooling
+.vercel/
+.DS_Store
+Thumbs.db
+*.log
+pnpm-debug.log*
+*.tsbuildinfo
+
+# editor files
+.idea/
+.vscode/
+*.swp
