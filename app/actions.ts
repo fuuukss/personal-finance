@@ -13,7 +13,9 @@ const initialError: ActionState = { ok: false, message: "Invalid request." };
 async function assertTrustedOrigin() {
   const origin = (await headers()).get("origin");
   const configured = process.env.APP_ORIGIN;
-  if (configured && origin && new URL(origin).origin !== new URL(configured).origin) throw new Error("Invalid request origin.");
+  if (configured && (!origin || new URL(origin).origin !== new URL(configured).origin)) {
+    throw new Error("Invalid request origin.");
+  }
 }
 
 function formObject(formData: FormData) {

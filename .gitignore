@@ -4,6 +4,7 @@ node_modules/
 # Next.js output
 .next/
 out/
+next-env.d.ts
 
 # local environment and secrets
 .env

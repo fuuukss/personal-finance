@@ -20,4 +20,4 @@ Run `pnpm check:secrets`, inspect `git status`, `git diff --cached`, and `git ls
 - Run `pnpm audit --prod --audit-level high` and resolve all high/critical findings.
 - Verify CSP, HSTS, frame denial, no-store behavior, Supabase redirect allowlist, disabled sign-up, and rate limits.
 
-CI statically verifies the migration and public source. A passing build alone is not a security verification. Database isolation remains unverified until `supabase test db` runs against a real local Supabase instance.
+CI verifies the public source and runs pgTAP against a disposable local Supabase stack. A passing build alone is not a security verification. Database isolation remains unverified until the `database-security` job (or `supabase test db` locally) passes for the exact commit being deployed; the current pgTAP suite validates policy declarations and privileges, while the manual second-identity checks above remain required before production use.

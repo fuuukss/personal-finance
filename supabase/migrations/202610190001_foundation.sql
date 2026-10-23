@@ -24,8 +24,7 @@ as $$
     and exists (select 1 from private.owner_allowlist o where o.user_id = candidate);
 $$;
 
-revoke all on function private.is_owner(uuid) from public;
-grant execute on function private.is_owner(uuid) to authenticated;
+revoke all on function private.is_owner(uuid) from public, anon, authenticated;
 
 create or replace function public.is_current_owner()
 returns boolean
@@ -261,19 +260,19 @@ begin
     execute format('alter table public.%I enable row level security', table_name);
     execute format('alter table public.%I force row level security', table_name);
     execute format(
-      'create policy %I on public.%I for select to authenticated using (owner_id = auth.uid() and private.is_owner(auth.uid()))',
+      'create policy %I on public.%I for select to authenticated using (owner_id = auth.uid() and public.is_current_owner())',
       table_name || '_select', table_name
     );
     execute format(
-      'create policy %I on public.%I for insert to authenticated with check (owner_id = auth.uid() and private.is_owner(auth.uid()))',
+      'create policy %I on public.%I for insert to authenticated with check (owner_id = auth.uid() and public.is_current_owner())',
       table_name || '_insert', table_name
     );
     execute format(
-      'create policy %I on public.%I for update to authenticated using (owner_id = auth.uid() and private.is_owner(auth.uid())) with check (owner_id = auth.uid() and private.is_owner(auth.uid()))',
+      'create policy %I on public.%I for update to authenticated using (owner_id = auth.uid() and public.is_current_owner()) with check (owner_id = auth.uid() and public.is_current_owner())',
       table_name || '_update', table_name
     );
     execute format(
-      'create policy %I on public.%I for delete to authenticated using (owner_id = auth.uid() and private.is_owner(auth.uid()))',
+      'create policy %I on public.%I for delete to authenticated using (owner_id = auth.uid() and public.is_current_owner())',
       table_name || '_delete', table_name
     );
   end loop;
@@ -303,7 +302,7 @@ declare
   account_currency text;
   signed_amount numeric(24,6);
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode = '42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode = '42501'; end if;
   if p_event_type not in ('expense','income','opening_balance','balance_adjustment') then
     raise exception 'Unsupported event type' using errcode = '22023';
   end if;
@@ -342,7 +341,7 @@ create or replace function public.create_account_with_opening_balance(
 language plpgsql security invoker set search_path = '' as $$
 declare actor uuid := auth.uid(); account_id uuid; next_order integer;
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode='42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode='42501'; end if;
   if char_length(trim(p_name)) not between 1 and 80 or upper(p_currency) !~ '^[A-Z]{3}$' then
     raise exception 'Invalid account' using errcode='22023';
   end if;
@@ -360,7 +359,7 @@ create or replace function public.reorder_account(p_account_id uuid, p_direction
 returns void language plpgsql security invoker set search_path = '' as $$
 declare actor uuid := auth.uid(); current_order integer; neighbor_id uuid; neighbor_order integer;
 begin
-  if not private.is_owner(actor) or p_direction not in (-1,1) then raise exception 'Not authorized' using errcode='42501'; end if;
+  if not public.is_current_owner() or p_direction not in (-1,1) then raise exception 'Not authorized' using errcode='42501'; end if;
   select sort_order into current_order from public.accounts where id=p_account_id and owner_id=actor for update;
   if current_order is null then raise exception 'Account not found' using errcode='P0002'; end if;
   select id,sort_order into neighbor_id,neighbor_order from public.accounts
@@ -387,7 +386,7 @@ declare
   current_balance numeric(24,6);
   adjustment numeric(24,6);
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode = '42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode = '42501'; end if;
   perform 1 from public.accounts where id = p_account_id and owner_id = actor and archived_at is null for update;
   if not found then raise exception 'Account not found' using errcode = 'P0002'; end if;
   select coalesce(sum(amount),0) into current_balance from public.ledger_entries
@@ -419,7 +418,7 @@ declare
   event_kind public.financial_event_type := 'transfer';
   effective_rate numeric(30,12);
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode = '42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode = '42501'; end if;
   if p_source_account_id = p_destination_account_id then raise exception 'Accounts must differ' using errcode = '22023'; end if;
   if p_source_amount <= 0 or p_destination_amount <= 0 then raise exception 'Amounts must be positive' using errcode = '22023'; end if;
 
@@ -462,7 +461,7 @@ language plpgsql security invoker set search_path = ''
 as $$
 declare actor uuid := auth.uid(); kind public.financial_event_type; signed_amount numeric(24,6);
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode = '42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode = '42501'; end if;
   select event_type into kind from public.financial_events where id=p_event_id and owner_id=actor for update;
   if kind not in ('expense','income','balance_adjustment') then raise exception 'This event must be reversed, not edited' using errcode='22023'; end if;
   if p_amount = 0 then raise exception 'Invalid amount' using errcode='22023'; end if;
@@ -477,7 +476,7 @@ create or replace function public.delete_financial_event(p_event_id uuid)
 returns void language plpgsql security invoker set search_path = '' as $$
 declare actor uuid := auth.uid(); kind public.financial_event_type;
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode='42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode='42501'; end if;
   select event_type into kind from public.financial_events where id=p_event_id and owner_id=actor for update;
   if kind = 'opening_balance' then raise exception 'Opening balances cannot be deleted' using errcode='22023'; end if;
   delete from public.financial_events where id=p_event_id and owner_id=actor;
@@ -491,7 +490,7 @@ declare
   actor uuid := auth.uid(); item jsonb; account_id uuid; account_currency text; account_kind public.account_kind;
   account_name text; opening numeric(24,6); position integer := 0;
 begin
-  if not private.is_owner(actor) then raise exception 'Not authorized' using errcode='42501'; end if;
+  if not public.is_current_owner() then raise exception 'Not authorized' using errcode='42501'; end if;
   insert into public.user_settings(owner_id,tracking_start_date) values(actor,p_start_date)
     on conflict(owner_id) do nothing;
   if (select onboarding_complete from public.user_settings where owner_id=actor for update) then return; end if;

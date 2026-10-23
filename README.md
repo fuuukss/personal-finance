@@ -56,11 +56,15 @@ Database authorization tests require a running local Supabase stack. E2E tests r
 
 ## Deploy
 
-1. Create a Supabase project, apply `supabase/migrations` with the CLI, disable sign-up, create the owner, and add the owner UUID to `private.owner_allowlist`.
-2. Import the public GitHub repository into Vercel.
-3. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `APP_ORIGIN`, and optionally `EXCHANGE_RATE_API_URL` to Vercel. Never add a service-role key to the app.
-4. Set the Supabase Site URL and allowed redirect URL to the final HTTPS domain.
-5. Deploy, then verify anonymous denial, owner login, logout, a small test transaction, balance reconstruction, and the production security headers.
+1. Run `supabase db start` and `supabase test db` against the disposable local stack. Do not continue if either fails.
+2. Create a Supabase Free project. In **Project Settings → Integrations → GitHub**, authorize only this repository, choose it, and set **Working directory** to `.`. Leave **Automatic branching** and **Deploy to production** off; branching is not part of the Free plan and production migrations must remain manual until testing passes.
+3. Link the CLI to the project and review the pending migration before running `supabase db push`. Disable sign-up, create the owner, and add the owner's UUID to `private.owner_allowlist`.
+4. Import the public GitHub repository into a personal Vercel Hobby project.
+5. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `APP_ORIGIN`, and optionally `EXCHANGE_RATE_API_URL` to Vercel. Never add a service-role key to the app.
+6. Set the Supabase Site URL and allowed redirect URL to the final HTTPS domain.
+7. Deploy, then verify anonymous denial, owner login, logout, a small test transaction, balance reconstruction, and the production security headers.
+
+GitHub's standard hosted runners are free for public repositories, so CI can test migrations in a local Supabase stack without a paid Supabase branch. Supabase Free does not include automatic backups or point-in-time recovery and can pause low-activity projects; follow the user-controlled backup procedure below and resume the project from the Dashboard if needed.
 
 On iPhone, open the HTTPS application in Safari, tap **Share**, choose **Add to Home Screen**, and confirm **Add**.
 

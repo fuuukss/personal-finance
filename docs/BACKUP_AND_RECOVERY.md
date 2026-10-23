@@ -1,22 +1,23 @@
 # Backup and recovery
 
-Supabase synchronization is not a backup. Check the selected Supabase plan's current backup and point-in-time recovery features before relying on them.
+Supabase synchronization is not a backup. The Supabase Free plan does not include automatic database backups or point-in-time recovery, so this application's zero-cost recovery plan depends on user-controlled logical exports.
 
 ## Backup
 
-1. Enable the platform's automatic database backups if the plan supports them and record the verified retention period outside this repository.
-2. At least monthly, create a user-controlled logical backup from a trusted computer with Supabase CLI/PostgreSQL tools. Store it in an encrypted local volume and an encrypted second location. Never place it in the Git repository or a public cloud folder.
+1. At least monthly, and before every schema change, create a user-controlled logical backup from a trusted computer with Supabase CLI/PostgreSQL tools.
+2. Store one copy on a BitLocker-encrypted Windows volume and one copy on a separate encrypted USB drive kept offline. This requires no subscription. Never place a dump in GitHub, Vercel, an unencrypted cloud folder, or an Actions artifact.
 3. Keep schema migrations in source control separately from data backups.
-4. After each schema change, take a fresh backup before applying the migration in production.
+4. Record the backup date, SHA-256 checksum, and most recent successful restore-test date outside this repository. A backup that has never been restored is not verified.
 
 Example (run interactively; never paste the database password into shell history):
 
 ```powershell
 supabase db dump --linked --data-only -f .\backups\finance-data.sql
 supabase db dump --linked -f .\backups\finance-schema.sql
+Get-FileHash -Algorithm SHA256 .\backups\finance-data.sql, .\backups\finance-schema.sql
 ```
 
-The local `backups/` directory is ignored by Git. Encrypt and move the files promptly. Logical dumps contain financial information and owner identifiers even though they do not contain the Supabase user's password.
+The local `backups/` directory is ignored by Git. Create it only on an encrypted volume, then copy the files to the encrypted offline location. Logical dumps contain financial information and owner identifiers even though they do not contain the Supabase user's password.
 
 ## Recovery test
 
