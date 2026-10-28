@@ -35,4 +35,16 @@ describe("public source hygiene", () => {
 
     expect(trackedFiles.filter((file) => /(^|\/)\.env($|\.)/.test(file) && file !== ".env.example")).toEqual([]);
   });
+
+  it("keeps password changes behind recovery authorization", () => {
+    const actions = readFileSync(join(root, "app/actions.ts"), "utf8");
+    const callback = readFileSync(join(root, "app/auth/callback/route.ts"), "utf8");
+    const confirmation = readFileSync(join(root, "app/auth/confirm/route.ts"), "utf8");
+
+    expect(actions).toContain("hasRecoveryAuthorization(user.id, sessionId)");
+    expect(actions).toContain("supabase.auth.updateUser({ password })");
+    expect(actions).toContain('supabase.rpc("is_current_owner")');
+    expect(callback).toContain("exchangeCodeForSession(code)");
+    expect(confirmation).toContain('type: "recovery"');
+  });
 });

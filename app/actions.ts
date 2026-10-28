@@ -5,9 +5,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOwner } from "@/lib/auth";
+import { clearRecoveryAuthorization, hasRecoveryAuthorization } from "@/lib/auth/recovery-server";
+import { sessionIdFromAccessToken, validateRecoveryPasswords } from "@/lib/auth/recovery";
 import { accountSchema, adjustmentSchema, categorySchema, eventSchema, transferSchema, valuationSchema } from "@/lib/validation/finance";
 
 export type ActionState = { ok: boolean; message: string; fieldErrors?: Record<string, string[]> };
+export type RecoveryActionState = { ok: boolean; message: string };
 const initialError: ActionState = { ok: false, message: "Invalid request." };
 
 async function assertTrustedOrigin() {
@@ -36,6 +39,45 @@ export async function loginAction(_state: ActionState, formData: FormData): Prom
     return { ok: false, message: "Unable to sign in with those credentials." };
   }
   redirect("/");
+}
+
+export async function updateRecoveryPasswordAction(
+  _state: RecoveryActionState,
+  formData: FormData,
+): Promise<RecoveryActionState> {
+  await assertTrustedOrigin();
+  const password = String(formData.get("password") ?? "");
+  const confirmation = String(formData.get("passwordConfirmation") ?? "");
+  const validationError = validateRecoveryPasswords(password, confirmation);
+  if (validationError) return { ok: false, message: validationError };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return { ok: false, message: "Recovery link je nevažeći ili je istekao." };
+  const { data: { session } } = await supabase.auth.getSession();
+  const sessionId = sessionIdFromAccessToken(session?.access_token);
+  if (!sessionId) return { ok: false, message: "Recovery link je nevažeći ili je istekao." };
+
+  let recoveryAuthorized = false;
+  try {
+    recoveryAuthorized = await hasRecoveryAuthorization(user.id, sessionId);
+  } catch {
+    return { ok: false, message: "Resetovanje lozinke trenutno nije dostupno." };
+  }
+  if (!recoveryAuthorized) return { ok: false, message: "Recovery link je nevažeći ili je istekao." };
+
+  const { data: allowed, error: ownerError } = await supabase.rpc("is_current_owner");
+  if (ownerError || !allowed) {
+    await clearRecoveryAuthorization();
+    return { ok: false, message: "Recovery link je nevažeći ili je istekao." };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { ok: false, message: "Lozinka nije promenjena. Zatražite novi recovery link i pokušajte ponovo." };
+
+  await clearRecoveryAuthorization();
+  await supabase.auth.signOut({ scope: "local" });
+  redirect("/login?reset=success");
 }
 
 export async function logoutAction() {
