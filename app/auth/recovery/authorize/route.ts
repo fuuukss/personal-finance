@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { clearRecoveryAuthorization, grantRecoveryAuthorization } from "@/lib/auth/recovery-server";
+import { clearRecoveryAuthorization, grantRecoveryAuthorization, isRecoveryAuthorizationConfigured } from "@/lib/auth/recovery-server";
 import { isRecentImplicitRecoverySession, sessionIdFromAccessToken } from "@/lib/auth/recovery";
 
 function noStore(status: number) {
@@ -21,6 +21,7 @@ function hasTrustedOrigin(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!hasTrustedOrigin(request)) return noStore(403);
+  if (!isRecoveryAuthorizationConfigured()) return noStore(503);
 
   let tokens: { accessToken?: unknown; refreshToken?: unknown };
   try {

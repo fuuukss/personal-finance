@@ -15,6 +15,10 @@ function recoverySecret() {
   return secret;
 }
 
+export function isRecoveryAuthorizationConfigured() {
+  return (process.env.AUTH_RECOVERY_SECRET ?? "").length >= 32;
+}
+
 export async function grantRecoveryAuthorization(userId: string, sessionId: string) {
   const cookieStore = await cookies();
   cookieStore.set(RECOVERY_COOKIE_NAME, createRecoveryAuthorization(userId, sessionId, recoverySecret()), {

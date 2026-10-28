@@ -49,6 +49,7 @@ describe("public source hygiene", () => {
     expect(callback).toContain("isPkceRecoverySession");
     expect(confirmation).toContain('type: "recovery"');
     expect(standardRecovery).toContain("isRecentImplicitRecoverySession(accessToken)");
+    expect(standardRecovery).toContain("isRecoveryAuthorizationConfigured()");
     expect(standardRecovery).toContain('supabase.rpc("is_current_owner")');
   });
 });
