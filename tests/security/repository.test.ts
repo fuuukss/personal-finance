@@ -40,11 +40,15 @@ describe("public source hygiene", () => {
     const actions = readFileSync(join(root, "app/actions.ts"), "utf8");
     const callback = readFileSync(join(root, "app/auth/callback/route.ts"), "utf8");
     const confirmation = readFileSync(join(root, "app/auth/confirm/route.ts"), "utf8");
+    const standardRecovery = readFileSync(join(root, "app/auth/recovery/authorize/route.ts"), "utf8");
 
     expect(actions).toContain("hasRecoveryAuthorization(user.id, sessionId)");
     expect(actions).toContain("supabase.auth.updateUser({ password })");
     expect(actions).toContain('supabase.rpc("is_current_owner")');
     expect(callback).toContain("exchangeCodeForSession(code)");
+    expect(callback).toContain("isPkceRecoverySession");
     expect(confirmation).toContain('type: "recovery"');
+    expect(standardRecovery).toContain("isRecentImplicitRecoverySession(accessToken)");
+    expect(standardRecovery).toContain('supabase.rpc("is_current_owner")');
   });
 });

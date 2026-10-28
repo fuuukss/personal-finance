@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { clearRecoveryAuthorization, grantRecoveryAuthorization } from "@/lib/auth/recovery-server";
-import { isRecoveryCallback, RECOVERY_PATH, sessionIdFromAccessToken } from "@/lib/auth/recovery";
+import { isPkceRecoverySession, isRecoveryCallback, RECOVERY_PATH, sessionIdFromAccessToken } from "@/lib/auth/recovery";
 
 function redirectWithoutCaching(request: NextRequest, path: string) {
   const response = NextResponse.redirect(new URL(path, request.url));
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const user = data.user;
     const sessionId = sessionIdFromAccessToken(data.session?.access_token);
     const { data: allowed } = user ? await supabase.rpc("is_current_owner") : { data: false };
-    if (!user || !sessionId || !allowed) {
+    if (!user || !sessionId || !isPkceRecoverySession(data.session?.access_token) || !allowed) {
       await supabase.auth.signOut({ scope: "local" });
       await clearRecoveryAuthorization();
       return redirectWithoutCaching(request, `${RECOVERY_PATH}?error=invalid`);

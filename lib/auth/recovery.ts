@@ -58,17 +58,46 @@ export function verifyRecoveryAuthorization(token: string | undefined, userId: s
 }
 
 export function sessionIdFromAccessToken(accessToken: string | undefined) {
+  return accessTokenClaims(accessToken)?.session_id ?? null;
+}
+
+type AccessTokenClaims = {
+  session_id?: string;
+  iat?: number;
+  amr?: Array<string | { method?: string; timestamp?: number }>;
+};
+
+function accessTokenClaims(accessToken: string | undefined): AccessTokenClaims | null {
   if (!accessToken) return null;
   const payload = accessToken.split(".")[1];
   if (!payload) return null;
   try {
-    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { session_id?: unknown };
-    return typeof claims.session_id === "string" && claims.session_id.length > 0 && claims.session_id.length <= 200
-      ? claims.session_id
-      : null;
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as AccessTokenClaims;
+    if (typeof claims.session_id !== "string" || claims.session_id.length < 1 || claims.session_id.length > 200) return null;
+    return claims;
   } catch {
     return null;
   }
+}
+
+function authenticationMethodTimestamp(claims: AccessTokenClaims, method: string) {
+  const entry = claims.amr?.find((item) => typeof item === "string" ? item === method : item.method === method);
+  if (!entry) return null;
+  return typeof entry === "string" || typeof entry.timestamp !== "number" ? claims.iat ?? null : entry.timestamp;
+}
+
+export function isRecentImplicitRecoverySession(accessToken: string | undefined, now = Date.now()) {
+  const claims = accessTokenClaims(accessToken);
+  if (!claims) return false;
+  const authenticatedAt = authenticationMethodTimestamp(claims, "otp");
+  if (authenticatedAt === null) return false;
+  const ageSeconds = Math.floor(now / 1000) - authenticatedAt;
+  return ageSeconds >= -30 && ageSeconds <= 5 * 60;
+}
+
+export function isPkceRecoverySession(accessToken: string | undefined) {
+  const claims = accessTokenClaims(accessToken);
+  return claims ? authenticationMethodTimestamp(claims, "recovery") !== null : false;
 }
 
 export function validateRecoveryPasswords(password: string, confirmation: string) {

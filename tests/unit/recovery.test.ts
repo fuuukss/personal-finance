@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createRecoveryAuthorization,
+  isPkceRecoverySession,
+  isRecentImplicitRecoverySession,
   isRecoveryCallback,
   RECOVERY_MAX_AGE_SECONDS,
   sessionIdFromAccessToken,
@@ -11,6 +13,12 @@ import {
 const signingKey = ["test-only", "recovery-key", "longer-than-thirty-two-characters"].join("-");
 const userId = "00000000-0000-4000-8000-000000000001";
 const sessionId = "00000000-0000-4000-8000-000000000099";
+
+function accessToken(claims: Record<string, unknown>) {
+  const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ session_id: sessionId, ...claims })).toString("base64url");
+  return `${header}.${payload}.signature`;
+}
 
 describe("password recovery authorization", () => {
   it("accepts an unexpired marker for the same user", () => {
@@ -33,10 +41,21 @@ describe("password recovery authorization", () => {
   });
 
   it("extracts the stable Supabase session identifier from a JWT", () => {
-    const header = Buffer.from(JSON.stringify({ alg: "RS256" })).toString("base64url");
-    const payload = Buffer.from(JSON.stringify({ session_id: sessionId })).toString("base64url");
-    expect(sessionIdFromAccessToken(`${header}.${payload}.signature`)).toBe(sessionId);
+    expect(sessionIdFromAccessToken(accessToken({}))).toBe(sessionId);
     expect(sessionIdFromAccessToken("not-a-jwt")).toBeNull();
+  });
+
+  it("accepts only a fresh implicit OTP session as standard-template recovery evidence", () => {
+    const now = Date.UTC(2026, 9, 28);
+    const issuedAt = Math.floor(now / 1000);
+    expect(isRecentImplicitRecoverySession(accessToken({ iat: issuedAt, amr: [{ method: "otp", timestamp: issuedAt }] }), now)).toBe(true);
+    expect(isRecentImplicitRecoverySession(accessToken({ iat: issuedAt, amr: [{ method: "password", timestamp: issuedAt }] }), now)).toBe(false);
+    expect(isRecentImplicitRecoverySession(accessToken({ iat: issuedAt - 301, amr: [{ method: "otp", timestamp: issuedAt - 301 }] }), now)).toBe(false);
+  });
+
+  it("distinguishes a PKCE recovery session from other PKCE sessions", () => {
+    expect(isPkceRecoverySession(accessToken({ amr: [{ method: "recovery", timestamp: 1 }] }))).toBe(true);
+    expect(isPkceRecoverySession(accessToken({ amr: [{ method: "oauth", timestamp: 1 }] }))).toBe(false);
   });
 });
 
