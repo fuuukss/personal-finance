@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -27,15 +28,11 @@ describe("database security declaration", () => {
 
 describe("public source hygiene", () => {
   it("contains no committed environment files", () => {
-    const files = walk(root).filter((file) => !file.includes("node_modules") && !file.includes(".git"));
-    expect(files.filter((file) => /(^|[\\/])\.env($|\.)/.test(file) && !file.endsWith(".env.example"))).toEqual([]);
+    const trackedFiles = execFileSync("git", ["ls-files", "-z", "--cached"], {
+      cwd: root,
+      encoding: "utf8",
+    }).split("\0").filter(Boolean);
+
+    expect(trackedFiles.filter((file) => /(^|\/)\.env($|\.)/.test(file) && file !== ".env.example")).toEqual([]);
   });
 });
-
-function walk(directory: string): string[] {
-  return readdirSync(directory).flatMap((name) => {
-    if (["node_modules", ".git", ".next"].includes(name)) return [];
-    const path = join(directory, name);
-    return statSync(path).isDirectory() ? walk(path) : [path];
-  });
-}
