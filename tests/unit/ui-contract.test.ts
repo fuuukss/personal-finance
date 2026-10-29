@@ -8,8 +8,8 @@ describe("Bugfixing #1 mobile UI contract", () => {
   it("keeps the compact dashboard order and clickable monthly drill-downs", () => {
     const dashboard = read("app/(protected)/page.tsx");
     expect(dashboard.indexOf("wealth-grid")).toBeLessThan(dashboard.indexOf("compact-stats"));
-    expect(dashboard.indexOf("compact-stats")).toBeLessThan(dashboard.indexOf("CompactAccountList"));
-    expect(dashboard.indexOf("CompactAccountList")).toBeLessThan(dashboard.indexOf("recentTransactions"));
+    expect(dashboard.indexOf("compact-stats")).toBeLessThan(dashboard.indexOf("<CompactAccountList"));
+    expect(dashboard.indexOf("<CompactAccountList")).toBeLessThan(dashboard.indexOf("recentTransactions"));
     expect(dashboard).toContain("/transactions?kind=expense");
     expect(dashboard).toContain("/transactions?kind=income");
   });

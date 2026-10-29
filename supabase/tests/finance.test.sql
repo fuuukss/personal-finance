@@ -54,7 +54,7 @@ select lives_ok(
   'expense account and amount change succeeds atomically'
 );
 
-select is((select coalesce(sum(amount), 0) from public.ledger_entries where account_id = '20000000-0000-0000-0000-000000000001'), 0::numeric, 'old account is fully reversed');
+select is((select coalesce(sum(amount), 0) from public.ledger_entries where account_id = '20000000-0000-0000-0000-000000000001'), (-500)::numeric, 'old account reverses only the edited expense and preserves unrelated history');
 select is((select coalesce(sum(amount), 0) from public.ledger_entries where account_id = '20000000-0000-0000-0000-000000000002'), (-600)::numeric, 'new account receives the edited expense');
 select is((select count(*) from public.financial_events where id = '40000000-0000-0000-0000-000000000001'), 1::bigint, 'only one financial event remains');
 select is((select count(*) from public.ledger_entries where event_id = '40000000-0000-0000-0000-000000000001'), 1::bigint, 'only one ledger movement remains');
