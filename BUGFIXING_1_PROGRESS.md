@@ -4,7 +4,7 @@ Last updated: 2026-10-29
 
 ## Current phase
 
-Phase 5 — Awaiting application deployment authorization. Application work for Phases 1–5, isolated database integration, the complete local application suite, the production migration, and post-migration RPC/RLS verification are complete. Authenticated production measurements, application deployment, and physical iPhone verification are still pending.
+Phase 5 — Post-deployment owner/device verification. Application work for Phases 1–5, isolated database integration, the complete test suite, production migration, GitHub publication, Vercel deployment, and anonymous production smoke checks are complete. Authenticated owner measurements and physical iPhone verification remain.
 
 ## Completed requirements
 
@@ -28,6 +28,8 @@ Phase 5 — Awaiting application deployment authorization. Application work for 
 - Applied `202610290001_atomic_event_account_edit.sql` to the correctly linked production Supabase project after URL/ref matching, reviewed-hash confirmation, migration listing, and a one-migration dry-run.
 - Confirmed production migration history is synchronized and a new dry-run reports no pending migrations.
 - Passed 14/14 production-safe RPC/privilege/RLS checks, including denial of a synthetic unauthorized authenticated RPC call before financial data access.
+- Fast-forwarded all 10 Bugfixing commits into `main`, pushed without force, and confirmed GitHub `verify`, `dependency-audit`, and `database-security` jobs succeeded.
+- Confirmed Vercel deployed the release commit and passed Chromium/WebKit production smoke checks for HTTPS login routing, protected-route denial, CSP/HSTS, standalone manifest, and mobile overflow.
 
 ## Partially completed requirements
 
@@ -38,8 +40,8 @@ Phase 5 — Awaiting application deployment authorization. Application work for 
 
 ## Remaining requirements
 
-- Obtain explicit owner authorization before pushing/merging the verified application branch to `main`, which triggers Vercel production deployment.
-- After deployment, verify the owner edit flow with an owner-approved synthetic or newly created transaction; do not alter an existing financial record merely for testing.
+- Verify successful owner login and protected page loading using the owner's existing credentials; credentials must not be shared with diagnostics.
+- Verify the owner edit flow with an owner-approved synthetic or newly created transaction; do not alter an existing financial record merely for testing.
 - Measure authenticated main-tab navigation before/after under comparable conditions and record actual results.
 - Verify the completed deployment on the physical iPhone 17 in Safari and installed standalone PWA mode.
 
@@ -61,18 +63,20 @@ Phase 5 — Awaiting application deployment authorization. Application work for 
 - Playwright: 8 passed on Desktop Chrome and the emulated iPhone profile.
 - Production build: passed with Next.js 16.4.2.
 - Browser bundle scan: passed.
-- Secret scan: passed across 101 repository files.
+- Secret scan: passed across 102 repository files, with no unexpected environment files or detected secret patterns in reachable Git history.
 - Production dependency audit: no known vulnerabilities.
 - Frankfurter connectivity: live EUR/RSD current and date-range endpoints previously responded successfully from the development machine.
-- Supabase isolated pgTAP suite: 30 passed across 2 SQL files (14 financial checks and 16 RLS/schema checks), including both category-mismatch directions and category-free balance adjustment.
+- Supabase isolated SQL suite: 44 passed across 3 SQL files (14 financial, 16 RLS/schema, and 14 production-contract checks).
 - Supabase production migration: `202610290001_atomic_event_account_edit.sql` applied successfully; local/remote history matches and the post-apply dry-run is up to date with zero pending migrations.
 - Supabase production verification: 14/14 RPC catalog, privilege, owner-guard, category-guard, RLS, anonymous-denial, and unauthorized-RPC checks passed without reading or changing financial rows.
+- GitHub Actions: `verify`, `dependency-audit`, and `database-security` completed successfully for the release commit.
+- Production smoke: Chromium and mobile WebKit passed login redirect, no-signup, protected-route, manifest, security-header, and overflow checks.
 - Supabase remote database lint: completed with no error and one pre-existing warning in `public.create_transfer` about an explicit text-to-enum assignment cast.
 - Supabase local stack: stopped cleanly after testing; its retained local volume contains no committed or production data.
 
 ## Known issues and constraints
 
-- Production now contains `update_financial_event_v2`; application deployment remains separately prohibited until explicit owner approval.
+- Production contains `update_financial_event_v2` and the matching application release is deployed.
 - The existing `public.create_transfer` lint warning comes from the already-applied foundation function. It is not a reported runtime failure or a security bypass; any cleanup must be a separate forward migration, never an edit/reset of production history.
 - The production EUR Savings status has not been queried because diagnostics must not emit private financial records.
 - Actual authenticated navigation timing and physical iPhone behavior remain unverified; do not invent measurements or claim device testing.
@@ -81,13 +85,14 @@ Phase 5 — Awaiting application deployment authorization. Application work for 
 
 ## Git state
 
-- Current branch: `codex/bugfixing-1`
+- Current branch: `main`
 - Latest verified implementation/test commit: `b550d47`
 - Mobile/report implementation commit: `245e11f`
 - Previous Phase 1 commits: `d98165f`, `992358a`
-- Deployment status: production application remains on the previously verified `main` (`2ab5c8e`); the development branch has not been pushed or deployed. The database migration is applied independently.
+- Release integration commit: `4742f938b19a903a527e060c3949e0031fdf8f15`
+- Deployment status: GitHub `main` and Vercel production contain the Bugfixing #1 release; anonymous production smoke checks passed.
 - Pending database migrations: none.
 
 ## Exact next implementation step
 
-Review the final branch diff and request explicit owner authorization to merge/push the verified changes to `main` for Vercel deployment. After deployment, verify production availability, authenticated navigation timing, the owner edit flow using owner-approved synthetic data, EUR Savings visibility, and physical iPhone behavior.
+On the physical iPhone 17, sign in with the existing owner account and verify dashboard safe areas, tab timing, EUR Savings visibility, one owner-approved synthetic expense edit between same-currency accounts, reports, IBKR value editing UI without saving, and standalone PWA behavior. Record real timings and remove only the newly created synthetic transaction after verification.
