@@ -151,15 +151,33 @@ export async function archiveAccountAction(id: string) {
   revalidatePath("/", "layout");
 }
 
-export async function renameAccountAction(formData: FormData) {
+export async function removeEmptyAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  await assertTrustedOrigin();
+  const id = String(formData.get("id") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, message: "Invalid account." };
+  const { supabase } = await requireOwner();
+  const [{ count: ledgerCount, error: ledgerError }, { count: valuationCount, error: valuationError }] = await Promise.all([
+    supabase.from("ledger_entries").select("id", { count: "exact", head: true }).eq("account_id", id),
+    supabase.from("investment_valuations").select("id", { count: "exact", head: true }).eq("account_id", id),
+  ]);
+  if (ledgerError || valuationError) return { ok: false, message: "Account history could not be checked." };
+  if ((ledgerCount ?? 0) > 0 || (valuationCount ?? 0) > 0) return { ok: false, message: "This account has financial history and cannot be removed." };
+  const { error } = await supabase.from("accounts").delete().eq("id", id);
+  if (error) return { ok: false, message: "Account could not be removed." };
+  revalidatePath("/", "layout");
+  redirect("/accounts");
+}
+
+export async function renameAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  if (!/^[0-9a-f-]{36}$/i.test(id) || name.length < 1 || name.length > 80) throw new Error("Invalid account.");
+  if (!/^[0-9a-f-]{36}$/i.test(id) || name.length < 1 || name.length > 80) return { ok: false, message: "Check the account name." };
   const { supabase } = await requireOwner();
   const { error } = await supabase.from("accounts").update({ name }).eq("id", id);
-  if (error) throw new Error("Account could not be renamed.");
+  if (error) return { ok: false, message: "Account could not be renamed." };
   revalidatePath("/", "layout");
+  return { ok: true, message: "Account renamed." };
 }
 
 export async function reorderAccountAction(id: string, direction: -1 | 1) {
@@ -256,15 +274,20 @@ export async function updatePreferencesAction(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
-export async function completeOnboardingAction(formData: FormData) {
+export async function completeOnboardingAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
   const startDate = String(formData.get("startDate") ?? "");
   const rawAccounts = String(formData.get("accounts") ?? "[]");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || rawAccounts.length > 10000) throw new Error("Invalid onboarding data.");
-  const accounts = JSON.parse(rawAccounts) as unknown;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || rawAccounts.length > 10000) return { ok: false, message: "Check the onboarding values." };
+  let accounts: unknown;
+  try {
+    accounts = JSON.parse(rawAccounts);
+  } catch {
+    return { ok: false, message: "Check the onboarding values." };
+  }
   const { supabase } = await requireOwner();
   const { error } = await supabase.rpc("complete_onboarding", { p_start_date: startDate, p_opening_balances: accounts });
-  if (error) throw new Error("Onboarding could not be completed.");
+  if (error) return { ok: false, message: "Onboarding could not be completed." };
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect("/?setup=complete");
 }

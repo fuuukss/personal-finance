@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, CreditCard, Home, List, Plus, Settings } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -17,10 +17,15 @@ export function Navigation({ dictionary, onAdd }: { dictionary: Dictionary; onAd
       {items.map(([href, label, Icon]) => {
         const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return <Link key={href} href={href} className={`nav-item ${active ? "active" : ""}`} aria-current={active ? "page" : undefined}>
-          <Icon size={20} strokeWidth={active ? 2.4 : 1.8} /><span>{label}</span>
+          <span className="nav-icon"><Icon size={20} strokeWidth={active ? 2.4 : 1.8} /><NavigationPendingIndicator /></span><span>{label}</span>
         </Link>;
       })}
     </nav>
     <button className="fab" type="button" onClick={onAdd} aria-label={dictionary.addTransaction}><Plus size={28} /></button>
   </>;
+}
+
+function NavigationPendingIndicator() {
+  const { pending } = useLinkStatus();
+  return <span className={`nav-pending ${pending ? "visible" : ""}`} aria-hidden="true" />;
 }

@@ -24,6 +24,13 @@ describe("database security declaration", () => {
     expect(migration).toContain("create table private.owner_allowlist");
     expect(migration).toContain("revoke all on schema private from public, anon, authenticated");
   });
+
+  it("makes onboarding owner-only and idempotent before creating opening entries", () => {
+    const onboarding = migration.slice(migration.indexOf("create or replace function public.complete_onboarding"));
+    expect(onboarding).toContain("if not public.is_current_owner()");
+    expect(onboarding.indexOf("if (select onboarding_complete")).toBeLessThan(onboarding.indexOf("for item in select"));
+    expect(onboarding).toContain("then return; end if;");
+  });
 });
 
 describe("public source hygiene", () => {

@@ -1,10 +1,11 @@
 import { z } from "zod";
+import Decimal from "decimal.js";
 
 const date = z.iso.date();
 const uuid = z.uuid();
 const amount = z.string().trim().regex(/^-?\d{1,18}([.,]\d{1,6})?$/).transform((value) => value.replace(",", "."));
-const positiveAmount = amount.refine((value) => Number(value) > 0, "Amount must be positive");
-const nonZeroAmount = amount.refine((value) => Number(value) !== 0, "Amount must not be zero");
+const positiveAmount = amount.refine((value) => new Decimal(value).isPositive(), "Amount must be positive");
+const nonZeroAmount = amount.refine((value) => !new Decimal(value).isZero(), "Amount must not be zero");
 
 export const eventSchema = z.object({
   eventType: z.enum(["expense", "income"]),

@@ -1,6 +1,7 @@
 import "server-only";
 import Decimal from "decimal.js";
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import { requireOwner } from "@/lib/auth";
 import type { Account, LedgerEvent } from "@/lib/finance/types";
 import type { ExchangeRate } from "@/lib/finance/types";
@@ -20,13 +21,13 @@ const getCachedReferenceRateSeries = unstable_cache(
 
 type RawAccount = Omit<Account, "balance">;
 
-export async function getSettings() {
+export const getSettings = cache(async function getSettings() {
   const { supabase, user } = await requireOwner();
   const { data } = await supabase.from("user_settings").select("*").eq("owner_id", user.id).maybeSingle();
   return data as { language: "sr-Latn" | "en"; display_currency: string; tracking_start_date: string | null; onboarding_complete: boolean } | null;
-}
+});
 
-export async function getAccounts(includeArchived = false): Promise<Account[]> {
+export const getAccounts = cache(async function getAccounts(includeArchived = false): Promise<Account[]> {
   const { supabase } = await requireOwner();
   let query = supabase.from("accounts").select("id,name,currency,kind,sort_order,archived_at").order("sort_order");
   if (!includeArchived) query = query.is("archived_at", null);
@@ -46,17 +47,18 @@ export async function getAccounts(includeArchived = false): Promise<Account[]> {
     latest_valuation: latestValuations.get(account.id)?.amount ?? null,
     valuation_date: latestValuations.get(account.id)?.date ?? null
   }));
-}
+});
 
-export async function getCategories() {
+export const getCategories = cache(async function getCategories() {
   const { supabase } = await requireOwner();
   const { data, error } = await supabase.from("categories").select("id,name,kind,color,archived_at").is("archived_at", null).order("name");
   if (error) throw new Error("Unable to load categories.");
   return data ?? [];
-}
+});
 
-export async function getEvents(limit = 100): Promise<LedgerEvent[]> {
+export const getEvents = cache(async function getEvents(limit = 100, startDate?: string, endDateExclusive?: string, accountId?: string): Promise<LedgerEvent[]> {
   const { supabase } = await requireOwner();
+  if (accountId && !/^[0-9a-f-]{36}$/i.test(accountId)) throw new Error("Invalid account.");
   interface RawEvent {
     id: string; event_type: LedgerEvent["event_type"]; effective_date: string; description: string | null; updated_at: string;
     ledger_entries: Array<{ id: string; amount: string; currency: string; account_id: string; category_id: string | null; accounts: { name: string } | Array<{ name: string }> | null; categories: { name: string; color: string } | Array<{ name: string; color: string }> | null }>;
@@ -66,10 +68,17 @@ export async function getEvents(limit = 100): Promise<LedgerEvent[]> {
   const batchSize = 1000;
   for (let start = 0; start < limit; start += batchSize) {
     const end = Math.min(start + batchSize, limit) - 1;
-    const { data, error } = await supabase
+    const selection = accountId
+      ? "id,event_type,effective_date,description,updated_at,ledger_entries!inner(id,amount,currency,account_id,category_id,accounts(name),categories(name,color)),transfer_details(source_account_id,destination_account_id,source_amount,destination_amount,effective_rate)"
+      : "id,event_type,effective_date,description,updated_at,ledger_entries(id,amount,currency,account_id,category_id,accounts(name),categories(name,color)),transfer_details(source_account_id,destination_account_id,source_amount,destination_amount,effective_rate)";
+    let query = supabase
       .from("financial_events")
-      .select("id,event_type,effective_date,description,updated_at,ledger_entries(id,amount,currency,account_id,category_id,accounts(name),categories(name,color)),transfer_details(source_account_id,destination_account_id,source_amount,destination_amount,effective_rate)")
-      .order("effective_date", { ascending: false }).order("created_at", { ascending: false }).range(start, end);
+      .select(selection)
+      .order("effective_date", { ascending: false }).order("created_at", { ascending: false });
+    if (startDate) query = query.gte("effective_date", startDate);
+    if (endDateExclusive) query = query.lt("effective_date", endDateExclusive);
+    if (accountId) query = query.eq("ledger_entries.account_id", accountId);
+    const { data, error } = await query.range(start, end);
     if (error) throw new Error("Unable to load transactions.");
     const page = (data ?? []) as unknown as RawEvent[];
     allData.push(...page);
@@ -84,7 +93,7 @@ export async function getEvents(limit = 100): Promise<LedgerEvent[]> {
     })),
     transfer: Array.isArray(event.transfer_details) ? (event.transfer_details[0] ?? null) : event.transfer_details
   })) as LedgerEvent[];
-}
+});
 
 export async function getExchangeRates(displayCurrency: string, baseCurrencies: string[] = []) {
   const { supabase } = await requireOwner();
@@ -131,9 +140,12 @@ export async function getReportReferenceData(displayCurrency: string, baseCurren
   }));
   const currentYear = new Date().getUTCFullYear();
   if (year && year <= currentYear) {
-    const from = `${year}-01-01`;
+    const from = `${year - 1}-12-15`;
     const to = year === currentYear ? new Date().toISOString().slice(0, 10) : `${year}-12-31`;
-    const currencies = [...new Set(baseCurrencies.map((currency) => currency.toUpperCase()).filter((currency) => currency !== displayCurrency))];
+    const currencies = [...new Set([
+      ...baseCurrencies,
+      ...(valuations ?? []).map((valuation) => valuation.currency),
+    ].map((currency) => currency.toUpperCase()).filter((currency) => currency !== displayCurrency))];
     const referenceSeries = await Promise.allSettled(currencies.map((currency) => getCachedReferenceRateSeries(currency, displayCurrency, from, to, process.env.EXCHANGE_RATE_API_URL)));
     for (const result of referenceSeries) {
       if (result.status !== "fulfilled") continue;

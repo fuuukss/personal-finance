@@ -14,14 +14,20 @@ export function roundMoney(value: Decimal.Value, currency: Currency) {
 }
 
 export function formatMoney(value: Decimal.Value, currency: Currency, language: "sr-Latn" | "en" = "sr-Latn") {
-  const locale = language === "sr-Latn" ? "sr-Latn-RS" : "en-US";
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency,
-    currencyDisplay: "code",
-    minimumFractionDigits: MINOR_UNITS[currency] ?? 2,
-    maximumFractionDigits: MINOR_UNITS[currency] ?? 2
-  }).format(money(value).toNumber());
+  const decimals = MINOR_UNITS[currency] ?? 2;
+  const formatted = formatDecimal(value, language, decimals);
+  return language === "sr-Latn" ? `${formatted} ${currency}` : `${currency} ${formatted}`;
+}
+
+export function formatDecimal(value: Decimal.Value, language: "sr-Latn" | "en" = "sr-Latn", decimalPlaces = 2) {
+  const rounded = money(value).toDecimalPlaces(decimalPlaces, Decimal.ROUND_HALF_EVEN);
+  const normalized = rounded.isZero() ? rounded.abs() : rounded;
+  const [integer = "0", fraction = ""] = normalized.abs().toFixed(decimalPlaces).split(".");
+  const group = language === "sr-Latn" ? "." : ",";
+  const decimal = language === "sr-Latn" ? "," : ".";
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, group);
+  const sign = normalized.isNegative() ? "-" : "";
+  return decimalPlaces > 0 ? `${sign}${grouped}${decimal}${fraction}` : `${sign}${grouped}`;
 }
 
 export function convert(value: Decimal.Value, rate: Decimal.Value, targetCurrency: Currency) {

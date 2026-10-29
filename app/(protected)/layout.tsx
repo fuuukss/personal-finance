@@ -7,6 +7,6 @@ export const dynamic = "force-dynamic";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   await requireOwner();
-  const [{ dictionary }, accounts, categories] = await Promise.all([getDictionary(), getAccounts(), getCategories()]);
-  return <AppChrome accounts={accounts} categories={categories} dictionary={dictionary}>{children}</AppChrome>;
+  const [{ dictionary, language }, accounts, categories] = await Promise.all([getDictionary(), getAccounts(), getCategories()]);
+  return <AppChrome accounts={accounts} categories={categories} dictionary={dictionary} language={language}>{children}</AppChrome>;
 }

@@ -31,3 +31,15 @@ test("standard ConfirmationURL fragment is removed and submitted for recovery au
   await expect(page).toHaveURL(/\/reset-password$/);
   expect(await page.evaluate(() => window.location.hash)).toBe("");
 });
+
+test("mobile viewport metadata and login shell avoid horizontal overflow", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute("content", /viewport-fit=cover/);
+  const dimensions = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    bodyWidth: document.body.scrollWidth,
+  }));
+  expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+  expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
+});

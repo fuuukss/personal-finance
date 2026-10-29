@@ -4,13 +4,15 @@ import { useActionState, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { createEventAction, createTransferAction, type ActionState } from "@/app/actions";
 import type { Account } from "@/lib/finance/types";
-import type { Dictionary } from "@/lib/i18n/dictionaries";
+import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 import { eligibleAccountsForNewEvent } from "@/lib/finance/account-eligibility";
+import { displayAccountName } from "@/lib/i18n/account-names";
+import Decimal from "decimal.js";
 
 const initial: ActionState = { ok: false, message: "" };
 
-export function TransactionSheet({ accounts, categories, dictionary: d, onClose }: {
-  accounts: Account[]; categories: Array<{ id: string; name: string; kind: string; color: string }>; dictionary: Dictionary; onClose: () => void;
+export function TransactionSheet({ accounts, categories, dictionary: d, language, onClose }: {
+  accounts: Account[]; categories: Array<{ id: string; name: string; kind: string; color: string }>; dictionary: Dictionary; language: Language; onClose: () => void;
 }) {
   const [kind, setKind] = useState<"expense" | "income" | "transfer">("expense");
   const [eventState, eventAction, eventPending] = useActionState(createEventAction, initial);
@@ -33,13 +35,13 @@ export function TransactionSheet({ accounts, categories, dictionary: d, onClose 
       </div>
       {kind === "transfer" ? <form action={transferAction} style={{ marginTop: "1rem" }}>
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-        <TransferFields accounts={eligibleAccounts} dictionary={d} today={today} /><FormFooter state={state} pending={pending} label={d.save} />
+        <TransferFields accounts={eligibleAccounts} dictionary={d} language={language} today={today} /><FormFooter state={state} pending={pending} label={d.save} />
       </form> : <form action={eventAction} style={{ marginTop: "1rem" }}>
         <input type="hidden" name="eventType" value={kind} /><input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <div className="form-grid">
           <Field label={d.amount}><input className="input" name="amount" type="text" inputMode="decimal" autoFocus autoComplete="off" placeholder="0,00" required /></Field>
           <Field label={d.category}><select className="input" name="categoryId" required>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-          <Field label={d.account}><select className="input" name="accountId" required>{eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}</select></Field>
+          <Field label={d.account}><select className="input" name="accountId" required>{eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
           <Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field>
           <div style={{ gridColumn: "1 / -1" }}><Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field></div>
         </div><FormFooter state={state} pending={pending} label={d.save} />
@@ -48,7 +50,7 @@ export function TransactionSheet({ accounts, categories, dictionary: d, onClose 
   </div>;
 }
 
-function TransferFields({ accounts, dictionary: d, today }: { accounts: Account[]; dictionary: Dictionary; today: string }) {
+function TransferFields({ accounts, dictionary: d, language, today }: { accounts: Account[]; dictionary: Dictionary; language: Language; today: string }) {
   const [sourceId, setSourceId] = useState(accounts[0]?.id ?? "");
   const [destinationId, setDestinationId] = useState(accounts[1]?.id ?? accounts[0]?.id ?? "");
   const [sourceAmount, setSourceAmount] = useState("");
@@ -57,26 +59,27 @@ function TransferFields({ accounts, dictionary: d, today }: { accounts: Account[
   const source = accounts.find((account) => account.id === sourceId);
   const destination = accounts.find((account) => account.id === destinationId);
   useEffect(() => {
-    const numeric = Number(sourceAmount.replace(",", "."));
-    if (!source || !destination || source.currency === destination.currency || !Number.isFinite(numeric) || numeric <= 0) return;
+    let numeric: Decimal;
+    try { numeric = new Decimal(sourceAmount.replace(",", ".")); } catch { return; }
+    if (!source || !destination || source.currency === destination.currency || !numeric.isPositive()) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(`/api/exchange-rate?base=${source.currency}&quote=${destination.currency}`, { signal: controller.signal, cache: "no-store" });
         const data = await response.json() as { rate?: string; date?: string; error?: string };
-        if (!response.ok || !data.rate) { setHint(data.error ?? "Rate unavailable"); return; }
-        const suggestion = (numeric * Number(data.rate)).toFixed(2);
+        if (!response.ok || !data.rate) { setHint(d.rateUnavailable); return; }
+        const suggestion = numeric.mul(data.rate).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN).toFixed(2);
         setDestinationAmount(suggestion);
-        setHint(`Indicative ${data.date}: 1 ${source.currency} = ${data.rate} ${destination.currency}. Replace with the actual amount received.`);
-      } catch { if (!controller.signal.aborted) setHint("Rate unavailable. Enter the actual amount manually."); }
+        setHint(`${d.indicativeRate} ${data.date}: 1 ${source.currency} = ${data.rate} ${destination.currency}.`);
+      } catch { if (!controller.signal.aborted) setHint(d.rateUnavailable); }
     }, 350);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [source, destination, sourceAmount]);
+  }, [source, destination, sourceAmount, d.indicativeRate, d.rateUnavailable]);
   return <div className="form-grid">
-    <Field label="Source account"><select className="input" name="sourceAccountId" required value={sourceId} onChange={(e) => { setHint(""); setSourceId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}</select></Field>
-    <Field label="Destination account"><select className="input" name="destinationAccountId" required value={destinationId} onChange={(e) => { setHint(""); setDestinationId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}</select></Field>
-    <Field label="Source amount"><input className="input" name="sourceAmount" type="text" inputMode="decimal" autoComplete="off" placeholder="0,00" required value={sourceAmount} onChange={(e) => { setHint(""); setSourceAmount(e.target.value); }} /></Field>
-    <Field label="Actual amount received"><input className="input" name="destinationAmount" type="text" inputMode="decimal" autoComplete="off" placeholder="0,00" required value={destinationAmount} onChange={(e) => setDestinationAmount(e.target.value)} /></Field>
+    <Field label={d.sourceAccount}><select className="input" name="sourceAccountId" required value={sourceId} onChange={(e) => { setHint(""); setSourceId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
+    <Field label={d.destinationAccount}><select className="input" name="destinationAccountId" required value={destinationId} onChange={(e) => { setHint(""); setDestinationId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
+    <Field label={d.sourceAmount}><input className="input" name="sourceAmount" type="text" inputMode="decimal" autoComplete="off" placeholder="0,00" required value={sourceAmount} onChange={(e) => { setHint(""); setSourceAmount(e.target.value); }} /></Field>
+    <Field label={d.receivedAmount}><input className="input" name="destinationAmount" type="text" inputMode="decimal" autoComplete="off" placeholder="0,00" required value={destinationAmount} onChange={(e) => setDestinationAmount(e.target.value)} /></Field>
     {hint && <p className="muted" style={{ gridColumn: "1 / -1", fontSize: ".78rem", margin: 0 }}>{hint}</p>}
     <Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field>
     <Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field>

@@ -6,6 +6,14 @@ export function accountDisplayValue(account: Account, rate: Decimal.Value) {
   return new Decimal(native).mul(rate);
 }
 
+export function isSpendingAccount(account: Account) {
+  return account.archived_at === null && account.currency === "RSD" && (account.kind === "cash" || account.kind === "bank");
+}
+
+export function spendingMoneyTotal(accounts: Account[]) {
+  return accounts.reduce((total, account) => isSpendingAccount(account) ? total.plus(account.balance) : total, new Decimal(0));
+}
+
 export function monthlyCashFlow(events: LedgerEvent[], month: string) {
   let expenses = new Decimal(0);
   let income = new Decimal(0);
