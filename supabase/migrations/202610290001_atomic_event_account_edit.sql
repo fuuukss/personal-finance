@@ -21,6 +21,7 @@ declare
   current_account_id uuid;
   entry_currency text;
   target_currency text;
+  target_category_kind public.category_kind;
   entry_count integer;
   signed_amount numeric(24,6);
 begin
@@ -77,6 +78,25 @@ begin
   end if;
   if target_currency <> entry_currency then
     raise exception 'Account currency mismatch' using errcode = '22023';
+  end if;
+
+  if p_category_id is null then
+    if kind in ('expense','income') then
+      raise exception 'Category is required' using errcode = '22023';
+    end if;
+  else
+    select category.kind into target_category_kind
+      from public.categories as category
+      where category.id = p_category_id
+        and category.owner_id = actor
+        and category.archived_at is null;
+    if target_category_kind is null then
+      raise exception 'Category not found' using errcode = 'P0002';
+    end if;
+    if (kind = 'expense' and target_category_kind <> 'expense')
+      or (kind = 'income' and target_category_kind <> 'income') then
+      raise exception 'Category type mismatch' using errcode = '22023';
+    end if;
   end if;
 
   signed_amount := case when kind = 'expense' then -abs(p_amount) else p_amount end;
