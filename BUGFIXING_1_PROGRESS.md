@@ -70,7 +70,7 @@ Phase 1 — Financial correctness (implementation complete locally; production m
 ## Git state
 
 - Current branch: `codex/bugfixing-1`
-- Latest verified baseline commit: `2ab5c8e` (new checkpoint commit pending)
+- Latest verified implementation commit: `d98165f`
 - Deployment status: production remains on the previously verified `main`; this branch is not deployed.
 - Pending database migrations: `202610290001_atomic_event_account_edit.sql` (dry-run only, not applied).
 
