@@ -5,18 +5,25 @@ import { Plus, X } from "lucide-react";
 import { createAccountAction, type ActionState } from "@/app/actions";
 import { CompactAccountList } from "@/components/compact-account-list";
 import type { Account } from "@/lib/finance/types";
+import { partitionAccounts } from "@/lib/finance/account-management";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 
 const initial: ActionState = { ok: false, message: "" };
 
-export function AccountsManager({ accounts, language, dictionary: d }: { accounts: Account[]; language: Language; dictionary: Dictionary }) {
+export function AccountsManager({ accounts, language, dictionary: d, notice = "" }: { accounts: Account[]; language: Language; dictionary: Dictionary; notice?: string }) {
   const [showAccount, setShowAccount] = useState(false);
   const [accountState, accountAction, accountPending] = useActionState(createAccountAction, initial);
   const today = new Date().toISOString().slice(0, 10);
+  const { active, archived } = partitionAccounts(accounts);
   return <>
     <div className="page-header compact-header"><div><p className="eyebrow">Saldo</p><h1>{d.accounts}</h1></div><button className="button" onClick={() => setShowAccount(true)}><Plus size={17} />{d.addAccount}</button></div>
-    <CompactAccountList accounts={accounts} language={language} />
-    {accounts.length === 0 && <div className="card empty">{d.noAccounts}</div>}
+    {notice && <div className="card success-banner" role="status">{notice}</div>}
+    <CompactAccountList accounts={active} language={language} />
+    {active.length === 0 && <div className="card empty">{d.noAccounts}</div>}
+    {archived.length > 0 && <details className="card account-action-card archived-accounts">
+      <summary>{d.archivedAccounts} <span className="badge">{archived.length}</span></summary>
+      <div className="details-form"><p className="muted">{d.archivedAccountsHint}</p><CompactAccountList accounts={archived} language={language} /></div>
+    </details>}
     {showAccount && <Modal title={d.addAccount} closeLabel={d.cancel} close={() => setShowAccount(false)}><form action={accountAction}>
       <div className="form-grid">
         <Field label={d.name}><input className="input" name="name" required maxLength={80} /></Field>

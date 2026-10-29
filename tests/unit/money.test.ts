@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculateAdjustment, convert, effectiveRate, formatDecimal, formatMoney, investmentProfitLoss, money, roundMoney, sumMoney } from "@/lib/finance/money";
-import { spendingMoneyTotal } from "@/lib/finance/summary";
+import { isCurrentNetWorthAccount, spendingMoneyTotal } from "@/lib/finance/summary";
 import type { Account } from "@/lib/finance/types";
 
 describe("exact money arithmetic", () => {
@@ -55,5 +55,12 @@ describe("exact money arithmetic", () => {
       { id: "4", name: "IBKR", currency: "EUR", kind: "investment", sort_order: 3, archived_at: null, balance: "0", latest_valuation: "3000" },
     ];
     expect(spendingMoneyTotal(accounts).toFixed(2)).toBe("3000.00");
+  });
+
+  it("excludes archived balances from current net worth eligibility", () => {
+    const active = { id: "1", name: "EUR", currency: "EUR", kind: "savings", sort_order: 0, archived_at: null, balance: "321.45" } satisfies Account;
+    const archived = { id: "2", name: "EUR Savings", currency: "EUR", kind: "savings", sort_order: 1, archived_at: "2026-10-20T10:00:00Z", balance: "321.45" } satisfies Account;
+
+    expect([active, archived].filter(isCurrentNetWorthAccount)).toEqual([active]);
   });
 });

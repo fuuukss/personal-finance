@@ -5,6 +5,7 @@ import { cache } from "react";
 import { requireOwner } from "@/lib/auth";
 import type { Account, LedgerEvent } from "@/lib/finance/types";
 import type { ExchangeRate } from "@/lib/finance/types";
+import type { AccountRemovalStrategy } from "@/lib/finance/account-management";
 import { fetchReferenceRate, fetchReferenceRateSeries, isRateStale } from "@/lib/finance/exchange-rates";
 
 const getCachedReferenceRate = unstable_cache(
@@ -47,6 +48,16 @@ export const getAccounts = cache(async function getAccounts(includeArchived = fa
     latest_valuation: latestValuations.get(account.id)?.amount ?? null,
     valuation_date: latestValuations.get(account.id)?.date ?? null
   }));
+});
+
+export const getAccountRemovalStrategy = cache(async function getAccountRemovalStrategy(accountId: string): Promise<AccountRemovalStrategy> {
+  if (!/^[0-9a-f-]{36}$/i.test(accountId)) throw new Error("Invalid account.");
+  const { supabase } = await requireOwner();
+  const { data, error } = await supabase.rpc("get_account_removal_strategy", { p_account_id: accountId });
+  if (error || !["delete", "archive", "blocked_transactions", "blocked_transfers", "blocked_valuations"].includes(String(data))) {
+    throw new Error("Unable to load account management status.");
+  }
+  return data as AccountRemovalStrategy;
 });
 
 export const getCategories = cache(async function getCategories() {

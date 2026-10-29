@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Equal } from "lucide-react";
 import { getAccounts, getCategories, getEvents, getExchangeRates, getReportReferenceData, getSettings } from "@/lib/data";
 import { getDictionary } from "@/lib/i18n/server";
-import { accountDisplayValue, spendingMoneyTotal } from "@/lib/finance/summary";
+import { accountDisplayValue, isCurrentNetWorthAccount, spendingMoneyTotal } from "@/lib/finance/summary";
 import { formatMoney } from "@/lib/finance/money";
 import { buildMonthlyReport } from "@/lib/finance/reports";
 import { CompactAccountList } from "@/components/compact-account-list";
@@ -23,7 +23,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const accountCurrencies = accounts.map((account) => account.currency);
   const rates = await getExchangeRates(settings.display_currency, accountCurrencies);
   const missingNetWorthCurrencies = new Set<string>();
-  const netWorth = accounts.reduce((total, account) => {
+  const netWorth = accounts.filter(isCurrentNetWorthAccount).reduce((total, account) => {
     const rate = rates.get(account.currency);
     if (!rate) { missingNetWorthCurrencies.add(account.currency); return total; }
     return total.plus(accountDisplayValue(account, rate.rate));

@@ -86,6 +86,7 @@ h2 { margin-bottom:1rem; font-size:1.05rem; letter-spacing:-.02em; }
 .back-link { display:inline-flex; align-items:center; gap:.35rem; margin-bottom:.45rem; color:#9eb6f8; font-size:.78rem; font-weight:650; }
 .account-detail-summary { padding:1rem; }
 .account-detail-summary .muted { margin:0 0 .35rem; font-size:.76rem; }
+.account-badges { display:flex; align-items:center; justify-content:flex-end; gap:.4rem; flex-wrap:wrap; }
 .account-detail-value { margin:0; font-size:clamp(1.45rem,7vw,2.2rem); font-weight:760; letter-spacing:-.045em; }
 .account-action-card { margin-top:.75rem; padding:1rem; }
 .account-action-heading { display:flex; align-items:center; gap:.55rem; margin-bottom:.8rem; color:#9bb5ff; }
@@ -96,6 +97,8 @@ h2 { margin-bottom:1rem; font-size:1.05rem; letter-spacing:-.02em; }
 .compact-form-grid { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
 .danger-zone { margin-top:1.25rem; border-color:#47262c; }
 .danger-zone summary { color:#ff9a9f; }
+.archived-accounts { margin-top:1rem; }
+.archived-accounts .compact-account-list { margin-top:.75rem; opacity:.78; }
 .period-toolbar { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:.5rem; margin-bottom:.65rem; }
 .period-form { display:grid; grid-template-columns:minmax(0,1fr) 6.3rem auto; gap:.5rem; }
 .compact-button { min-height:2.65rem; padding:.5rem .75rem; }

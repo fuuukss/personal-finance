@@ -8,6 +8,7 @@ import { requireOwner } from "@/lib/auth";
 import { clearRecoveryAuthorization, hasRecoveryAuthorization } from "@/lib/auth/recovery-server";
 import { sessionIdFromAccessToken, validateRecoveryPasswords } from "@/lib/auth/recovery";
 import { accountSchema, adjustmentSchema, categorySchema, eventSchema, transferSchema, updateEventSchema, valuationSchema } from "@/lib/validation/finance";
+import { getDictionary } from "@/lib/i18n/server";
 
 export type ActionState = { ok: boolean; message: string; fieldErrors?: Record<string, string[]> };
 export type RecoveryActionState = { ok: boolean; message: string };
@@ -131,53 +132,63 @@ export async function createTransferAction(_state: ActionState, formData: FormDa
 
 export async function createAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
+  const { dictionary: d } = await getDictionary();
   const parsed = accountSchema.safeParse(formObject(formData));
-  if (!parsed.success) return { ok: false, message: "Check the account values.", fieldErrors: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) return { ok: false, message: d.accountValuesInvalid, fieldErrors: parsed.error.flatten().fieldErrors };
   const { supabase } = await requireOwner();
   const value = parsed.data;
   const { error } = await supabase.rpc("create_account_with_opening_balance", {
     p_name: value.name, p_currency: value.currency, p_kind: value.kind,
     p_opening_balance: value.openingBalance, p_start_date: value.startDate, p_idempotency_key: crypto.randomUUID()
   });
-  if (error) return { ok: false, message: "Account could not be created." };
+  if (error?.code === "23505") return { ok: false, message: d.accountNameInUse };
+  if (error) return { ok: false, message: d.accountCreateFailed };
   revalidatePath("/", "layout");
-  return { ok: true, message: "Account created." };
+  return { ok: true, message: d.accountCreated };
 }
 
-export async function archiveAccountAction(id: string) {
+export async function removeOrArchiveAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
-  const { supabase } = await requireOwner();
-  await supabase.from("accounts").update({ archived_at: new Date().toISOString() }).eq("id", id);
-  revalidatePath("/", "layout");
-}
-
-export async function removeEmptyAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
-  await assertTrustedOrigin();
+  const { dictionary: d } = await getDictionary();
   const id = String(formData.get("id") ?? "");
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, message: "Invalid account." };
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, message: d.accountNotFound };
   const { supabase } = await requireOwner();
-  const [{ count: ledgerCount, error: ledgerError }, { count: valuationCount, error: valuationError }] = await Promise.all([
-    supabase.from("ledger_entries").select("id", { count: "exact", head: true }).eq("account_id", id),
-    supabase.from("investment_valuations").select("id", { count: "exact", head: true }).eq("account_id", id),
-  ]);
-  if (ledgerError || valuationError) return { ok: false, message: "Account history could not be checked." };
-  if ((ledgerCount ?? 0) > 0 || (valuationCount ?? 0) > 0) return { ok: false, message: "This account has financial history and cannot be removed." };
-  const { error } = await supabase.from("accounts").delete().eq("id", id);
-  if (error) return { ok: false, message: "Account could not be removed." };
+  const { data, error } = await supabase.rpc("remove_or_archive_account", { p_account_id: id });
+  if (error?.code === "P0002") return { ok: false, message: d.accountNotFound };
+  if (error?.code === "P2001") return { ok: false, message: d.accountHasValuations };
+  if (error?.code === "P2002") return { ok: false, message: d.accountHasTransfers };
+  if (error?.code === "P2003") return { ok: false, message: d.accountHasTransactions };
+  if (error) return { ok: false, message: d.accountRemoveFailed };
   revalidatePath("/", "layout");
-  redirect("/accounts");
+  redirect(data === "archived" ? "/accounts?account=archived" : "/accounts?account=deleted");
 }
 
 export async function renameAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
+  const { dictionary: d } = await getDictionary();
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  if (!/^[0-9a-f-]{36}$/i.test(id) || name.length < 1 || name.length > 80) return { ok: false, message: "Check the account name." };
+  if (!/^[0-9a-f-]{36}$/i.test(id) || name.length < 1 || name.length > 80) return { ok: false, message: d.accountNameInvalid };
   const { supabase } = await requireOwner();
-  const { error } = await supabase.from("accounts").update({ name }).eq("id", id);
-  if (error) return { ok: false, message: "Account could not be renamed." };
+  const { error } = await supabase.rpc("rename_account", { p_account_id: id, p_name: name });
+  if (error?.code === "23505") return { ok: false, message: d.accountNameInUse };
+  if (error?.code === "P0002") return { ok: false, message: d.accountNotFound };
+  if (error) return { ok: false, message: d.accountRenameFailed };
   revalidatePath("/", "layout");
-  return { ok: true, message: "Account renamed." };
+  return { ok: true, message: d.accountRenamed };
+}
+
+export async function restoreAccountAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  await assertTrustedOrigin();
+  const { dictionary: d } = await getDictionary();
+  const id = String(formData.get("id") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, message: d.accountNotFound };
+  const { supabase } = await requireOwner();
+  const { error } = await supabase.rpc("restore_account", { p_account_id: id });
+  if (error?.code === "P0002") return { ok: false, message: d.accountNotFound };
+  if (error) return { ok: false, message: d.accountRestoreFailed };
+  revalidatePath("/", "layout");
+  redirect("/accounts?account=restored");
 }
 
 export async function reorderAccountAction(id: string, direction: -1 | 1) {

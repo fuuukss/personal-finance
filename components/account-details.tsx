@@ -5,39 +5,51 @@ import { useActionState } from "react";
 import { ArrowLeft, Pencil, Scale, Trash2, TrendingUp } from "lucide-react";
 import {
   reconcileAccountAction,
-  removeEmptyAccountAction,
+  removeOrArchiveAccountAction,
   renameAccountAction,
+  restoreAccountAction,
   saveValuationAction,
   type ActionState,
 } from "@/app/actions";
 import { TransactionList } from "@/components/transaction-list";
 import { formatMoney } from "@/lib/finance/money";
 import type { Account, LedgerEvent } from "@/lib/finance/types";
+import type { AccountRemovalStrategy } from "@/lib/finance/account-management";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 import { displayAccountName } from "@/lib/i18n/account-names";
 import { formatLocalDate } from "@/lib/i18n/format";
 
 const initial: ActionState = { ok: false, message: "" };
 
-export function AccountDetails({ account, accounts, events, categories, language, dictionary: d }: {
+export function AccountDetails({ account, accounts, events, categories, removalStrategy, language, dictionary: d }: {
   account: Account;
   accounts: Account[];
   events: LedgerEvent[];
   categories: Array<{ id: string; name: string; kind: string; color: string }>;
+  removalStrategy: AccountRemovalStrategy;
   language: Language;
   dictionary: Dictionary;
 }) {
   const [valuationState, valuationAction, valuationPending] = useActionState(saveValuationAction, initial);
   const [adjustmentState, adjustmentAction, adjustmentPending] = useActionState(reconcileAccountAction, initial);
-  const [removeState, removeAction, removePending] = useActionState(removeEmptyAccountAction, initial);
+  const [removeState, removeAction, removePending] = useActionState(removeOrArchiveAccountAction, initial);
+  const [restoreState, restoreAction, restorePending] = useActionState(restoreAccountAction, initial);
   const [renameState, renameAction, renamePending] = useActionState(renameAccountAction, initial);
   const today = new Date().toISOString().slice(0, 10);
   const displayValue = account.kind === "investment" ? (account.latest_valuation ?? account.balance) : account.balance;
+  const isArchived = account.archived_at !== null;
+  const removalBlockedMessage = removalStrategy === "blocked_transfers"
+    ? d.accountHasTransfers
+    : removalStrategy === "blocked_valuations"
+      ? d.accountHasValuations
+      : removalStrategy === "blocked_transactions"
+        ? d.accountHasTransactions
+        : "";
 
   return <>
     <div className="page-header compact-header">
       <div><Link className="back-link" href="/accounts"><ArrowLeft size={16} />{d.accounts}</Link><h1>{displayAccountName(account.name, language)}</h1></div>
-      <span className="badge">{account.currency}</span>
+      <div className="account-badges"><span className="badge">{account.currency}</span>{isArchived && <span className="badge">{d.archived}</span>}</div>
     </div>
     <section className="card account-detail-summary">
       <p className="muted">{account.kind === "investment" ? d.currentValue : d.currentBalance}</p>
@@ -45,7 +57,17 @@ export function AccountDetails({ account, accounts, events, categories, language
       {account.kind === "investment" && account.valuation_date && <p className="wealth-note">{d.valuationDate}: {formatLocalDate(account.valuation_date, language)}</p>}
     </section>
 
-    {account.kind === "investment" && <section className="card account-action-card">
+    {isArchived && <section className="card account-action-card">
+      <p className="muted">{d.archivedAccountsHint}</p>
+      <form action={restoreAction} onSubmit={(event) => { if (!confirm(d.confirmAccountRestore)) event.preventDefault(); }}>
+        <input type="hidden" name="id" value={account.id} />
+        <p aria-live="polite" className={restoreState.ok ? "positive" : "form-error"}>{restoreState.message}</p>
+        <p className="muted">{d.restoreAccountHint}</p>
+        <div className="form-actions"><button className="button" disabled={restorePending}>{restorePending ? "…" : d.restoreAccount}</button></div>
+      </form>
+    </section>}
+
+    {!isArchived && account.kind === "investment" && <section className="card account-action-card">
       <div className="account-action-heading"><TrendingUp size={18} /><h2>{d.updateValue}</h2></div>
       <form action={valuationAction}><input type="hidden" name="accountId" value={account.id} /><div className="form-grid compact-form-grid">
         <Field label={`${d.amount} (${account.currency})`}><input className="input" name="amount" inputMode="decimal" defaultValue={account.latest_valuation ?? ""} required /></Field>
@@ -58,16 +80,19 @@ export function AccountDetails({ account, accounts, events, categories, language
       <input type="hidden" name="id" value={account.id} /><Field label={d.name}><input className="input" name="name" defaultValue={account.name} required maxLength={80} /></Field><Footer state={renameState} pending={renamePending} label={d.save} />
     </form></details>
 
-    <details className="card account-action-card"><summary><Scale size={17} />{d.balanceAdjustment}</summary><form action={adjustmentAction} className="details-form">
+    {!isArchived && <details className="card account-action-card"><summary><Scale size={17} />{d.balanceAdjustment}</summary><form action={adjustmentAction} className="details-form">
       <input type="hidden" name="accountId" value={account.id} /><div className="form-grid compact-form-grid"><Field label={`${d.targetBalance} (${account.currency})`}><input className="input" name="targetBalance" inputMode="decimal" defaultValue={account.balance} required /></Field><Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field><Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field></div><Footer state={adjustmentState} pending={adjustmentPending} label={d.save} />
-    </form></details>
+    </form></details>}
 
     <div className="section-row compact-section-row"><h2>{d.accountHistory}</h2></div>
-    <TransactionList events={events} accounts={accounts} categories={categories} language={language} dictionary={d} />
+    <TransactionList events={events} accounts={accounts} categories={categories} language={language} dictionary={d} editable={!isArchived} />
 
-    <details className="card account-action-card danger-zone"><summary><Trash2 size={17} />{d.removeAccount}</summary><form action={removeAction} className="details-form">
-      <input type="hidden" name="id" value={account.id} /><p className="muted">{d.removeAccountHint}</p><p aria-live="polite" className="form-error">{removeState.message}</p><button className="button danger" disabled={removePending}>{removePending ? "…" : d.removeAccount}</button>
-    </form></details>
+    {!isArchived && <details className="card account-action-card danger-zone"><summary><Trash2 size={17} />{d.removeAccount}</summary><div className="details-form">
+      <p className="muted">{d.removeAccountHint}</p>
+      {removalBlockedMessage ? <p className="form-error">{removalBlockedMessage}</p> : <form action={removeAction} onSubmit={(event) => { if (!confirm(d.confirmAccountRemoval)) event.preventDefault(); }}>
+        <input type="hidden" name="id" value={account.id} /><p aria-live="polite" className="form-error">{removeState.message}</p><button className="button danger" disabled={removePending}>{removePending ? "…" : d.removeAccount}</button>
+      </form>}
+    </div></details>}
   </>;
 }
 

@@ -6,6 +6,10 @@ export function accountDisplayValue(account: Account, rate: Decimal.Value) {
   return new Decimal(native).mul(rate);
 }
 
+export function isCurrentNetWorthAccount(account: Account) {
+  return account.archived_at === null;
+}
+
 export function isSpendingAccount(account: Account) {
   return account.archived_at === null && account.currency === "RSD" && (account.kind === "cash" || account.kind === "bank");
 }

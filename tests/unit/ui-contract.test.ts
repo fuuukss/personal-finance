@@ -17,8 +17,18 @@ describe("Bugfixing #1 mobile UI contract", () => {
   it("uses compact account rows without visible reorder or archive controls", () => {
     const manager = read("components/accounts-manager.tsx");
     expect(manager).toContain("CompactAccountList");
+    expect(manager).toContain("archivedAccountsHint");
     expect(manager).not.toContain("reorderAccountAction");
     expect(manager).not.toContain("archiveAccountAction");
+  });
+
+  it("offers explicit archived-account recovery and safe removal messaging", () => {
+    const details = read("components/account-details.tsx");
+    const actions = read("app/actions.ts");
+    expect(details).toContain("restoreAccountAction");
+    expect(details).toContain("confirmAccountRemoval");
+    expect(actions).toContain('supabase.rpc("remove_or_archive_account"');
+    expect(actions).not.toContain("removeEmptyAccountAction");
   });
 
   it("exposes month/year filters, report views, and a secondary PDF option", () => {
