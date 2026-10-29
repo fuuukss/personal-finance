@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { createEventAction, createTransferAction, type ActionState } from "@/app/actions";
 import type { Account } from "@/lib/finance/types";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { eligibleAccountsForNewEvent } from "@/lib/finance/account-eligibility";
 
 const initial: ActionState = { ok: false, message: "" };
 
@@ -19,6 +20,7 @@ export function TransactionSheet({ accounts, categories, dictionary: d, onClose 
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   useEffect(() => { if (state.ok) { const timer = setTimeout(onClose, 350); return () => clearTimeout(timer); } }, [state.ok, onClose]);
   const filteredCategories = categories.filter((category) => category.kind === kind);
+  const eligibleAccounts = eligibleAccountsForNewEvent(accounts, kind);
   const today = new Date().toISOString().slice(0, 10);
 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -31,13 +33,13 @@ export function TransactionSheet({ accounts, categories, dictionary: d, onClose 
       </div>
       {kind === "transfer" ? <form action={transferAction} style={{ marginTop: "1rem" }}>
         <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-        <TransferFields accounts={accounts} dictionary={d} today={today} /><FormFooter state={state} pending={pending} label={d.save} />
+        <TransferFields accounts={eligibleAccounts} dictionary={d} today={today} /><FormFooter state={state} pending={pending} label={d.save} />
       </form> : <form action={eventAction} style={{ marginTop: "1rem" }}>
         <input type="hidden" name="eventType" value={kind} /><input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <div className="form-grid">
           <Field label={d.amount}><input className="input" name="amount" type="text" inputMode="decimal" autoFocus autoComplete="off" placeholder="0,00" required /></Field>
           <Field label={d.category}><select className="input" name="categoryId" required>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-          <Field label={d.account}><select className="input" name="accountId" required>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}</select></Field>
+          <Field label={d.account}><select className="input" name="accountId" required>{eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.currency}</option>)}</select></Field>
           <Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field>
           <div style={{ gridColumn: "1 / -1" }}><Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field></div>
         </div><FormFooter state={state} pending={pending} label={d.save} />

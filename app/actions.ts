@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireOwner } from "@/lib/auth";
 import { clearRecoveryAuthorization, hasRecoveryAuthorization } from "@/lib/auth/recovery-server";
 import { sessionIdFromAccessToken, validateRecoveryPasswords } from "@/lib/auth/recovery";
-import { accountSchema, adjustmentSchema, categorySchema, eventSchema, transferSchema, valuationSchema } from "@/lib/validation/finance";
+import { accountSchema, adjustmentSchema, categorySchema, eventSchema, transferSchema, updateEventSchema, valuationSchema } from "@/lib/validation/finance";
 
 export type ActionState = { ok: boolean; message: string; fieldErrors?: Record<string, string[]> };
 export type RecoveryActionState = { ok: boolean; message: string };
@@ -224,19 +224,21 @@ export async function deleteEventAction(id: string) {
 
 export async function updateEventAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   await assertTrustedOrigin();
-  const id = String(formData.get("id") ?? "");
-  const amount = String(formData.get("amount") ?? "").replace(",", ".");
-  const categoryIdValue = String(formData.get("categoryId") ?? "");
-  const effectiveDate = String(formData.get("effectiveDate") ?? "");
-  const description = String(formData.get("description") ?? "").trim();
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !/^-?\d{1,18}(\.\d{1,6})?$/.test(amount) || !/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate) || description.length > 500) {
-    return { ok: false, message: "Check the entered values." };
-  }
-  const categoryId = /^[0-9a-f-]{36}$/i.test(categoryIdValue) ? categoryIdValue : null;
+  const parsed = updateEventSchema.safeParse(formObject(formData));
+  if (!parsed.success) return { ok: false, message: "Check the entered values.", fieldErrors: parsed.error.flatten().fieldErrors };
   const { supabase } = await requireOwner();
-  const { error } = await supabase.rpc("update_financial_event", {
-    p_event_id: id, p_amount: amount, p_category_id: categoryId, p_effective_date: effectiveDate, p_description: description
+  const value = parsed.data;
+  const { error } = await supabase.rpc("update_financial_event_v2", {
+    p_event_id: value.id,
+    p_account_id: value.accountId,
+    p_amount: value.amount,
+    p_category_id: value.categoryId,
+    p_effective_date: value.effectiveDate,
+    p_description: value.description,
+    p_expected_updated_at: value.expectedUpdatedAt
   });
+  if (error?.code === "40001") return { ok: false, message: "Transaction changed elsewhere. Refresh and try again." };
+  if (error?.code === "22023" || error?.code === "23514") return { ok: false, message: "Choose an active account with the same currency and check the entered values." };
   if (error) return { ok: false, message: "Transaction could not be updated." };
   revalidatePath("/", "layout");
   return { ok: true, message: "Transaction updated." };

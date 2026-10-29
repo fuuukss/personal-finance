@@ -21,6 +21,7 @@ export interface LedgerEvent {
   event_type: EventType;
   effective_date: string;
   description: string | null;
+  updated_at: string;
   entries: Array<{
     id: string;
     amount: string;

@@ -4,6 +4,7 @@ const date = z.iso.date();
 const uuid = z.uuid();
 const amount = z.string().trim().regex(/^-?\d{1,18}([.,]\d{1,6})?$/).transform((value) => value.replace(",", "."));
 const positiveAmount = amount.refine((value) => Number(value) > 0, "Amount must be positive");
+const nonZeroAmount = amount.refine((value) => Number(value) !== 0, "Amount must not be zero");
 
 export const eventSchema = z.object({
   eventType: z.enum(["expense", "income"]),
@@ -50,4 +51,14 @@ export const adjustmentSchema = z.object({
   targetBalance: amount,
   effectiveDate: date,
   description: z.string().trim().max(500).optional().default("")
+});
+
+export const updateEventSchema = z.object({
+  id: uuid,
+  accountId: uuid,
+  amount: nonZeroAmount,
+  categoryId: z.union([uuid, z.literal("")]).transform((value) => value || null),
+  effectiveDate: date,
+  description: z.string().trim().max(500).optional().default(""),
+  expectedUpdatedAt: z.iso.datetime({ offset: true })
 });

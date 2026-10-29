@@ -8,7 +8,8 @@ export default async function StatisticsPage({ searchParams }: { searchParams: P
   const year = Number.isInteger(requested) && requested >= 2000 && requested <= 2200 ? requested : new Date().getFullYear();
   const [{ language, dictionary }, settings, events] = await Promise.all([getDictionary(), getSettings(), getEvents(5000)]);
   const currency = settings?.display_currency ?? "RSD";
-  const { rates } = await getReportReferenceData(currency);
+  const eventCurrencies = [...new Set(events.flatMap((event) => event.entries.map((entry) => entry.currency)))];
+  const { rates } = await getReportReferenceData(currency, eventCurrencies, year);
   const report = buildMonthlyReport(events, rates, currency, year);
   const categories = buildCategoryReport(events, rates, currency, year);
   return <main className="page"><StatisticsDashboard months={report.months} categories={categories} currency={currency} language={language} dictionary={dictionary} missingRates={report.missing} year={year} /></main>;

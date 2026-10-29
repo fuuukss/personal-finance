@@ -1,19 +1,29 @@
 "use client";
 
-import { useActionState, useMemo, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
 import { Pencil, Search, Trash2, X } from "lucide-react";
-import type { LedgerEvent } from "@/lib/finance/types";
+import type { Account, LedgerEvent } from "@/lib/finance/types";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 import { eventIcons } from "@/components/ui/icons";
 import { formatMoney } from "@/lib/finance/money";
 import { deleteEventAction, updateEventAction, type ActionState } from "@/app/actions";
 import Decimal from "decimal.js";
+import { eligibleAccountsForEventEdit } from "@/lib/finance/account-eligibility";
 
-export function TransactionList({ events, language, dictionary: d, searchable = false }: { events: LedgerEvent[]; language: Language; dictionary: Dictionary; searchable?: boolean }) {
+interface Category { id: string; name: string; kind: string; color: string; }
+
+export function TransactionList({ events, accounts, categories, language, dictionary: d, searchable = false }: {
+  events: LedgerEvent[]; accounts: Account[]; categories: Category[]; language: Language; dictionary: Dictionary; searchable?: boolean;
+}) {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<LedgerEvent | null>(null);
   const [pending, startTransition] = useTransition();
   const [editState, editAction, editPending] = useActionState(updateEventAction, { ok: false, message: "" } satisfies ActionState);
+  useEffect(() => {
+    if (!editState.ok) return;
+    const timer = setTimeout(() => setEditing(null), 350);
+    return () => clearTimeout(timer);
+  }, [editState.ok]);
   const filtered = useMemo(() => events.filter((event) => {
     const haystack = `${event.description ?? ""} ${event.entries.map((e) => `${e.account?.name ?? ""} ${e.category?.name ?? ""}`).join(" ")}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
@@ -36,10 +46,43 @@ export function TransactionList({ events, language, dictionary: d, searchable = 
         </div>;
       })}
     </div>
-    {editing && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}><section className="sheet" role="dialog" aria-modal="true"><div className="page-header"><h2>{d.edit}</h2><button className="button secondary" onClick={() => setEditing(null)}><X size={17} /></button></div><form action={editAction}>
-      <input type="hidden" name="id" value={editing.id} /><input type="hidden" name="categoryId" value={editing.entries[0]?.category_id ?? ""} />
-      <div className="form-grid"><div className="field"><label>{d.amount}</label><input className="input" name="amount" inputMode="decimal" defaultValue={new Decimal(editing.entries[0]?.amount ?? 0).abs().toFixed()} required /></div><div className="field"><label>{d.date}</label><input className="input" name="effectiveDate" type="date" defaultValue={editing.effective_date} required /></div><div className="field" style={{ gridColumn: "1 / -1" }}><label>{d.description}</label><input className="input" name="description" defaultValue={editing.description ?? ""} maxLength={500} /></div></div>
-      <p className={editState.ok ? "positive" : "form-error"}>{editState.message}</p><div className="form-actions"><button className="button" disabled={editPending}>{editPending ? "…" : d.save}</button></div>
-    </form></section></div>}
+    {editing && <EditTransactionSheet event={editing} accounts={accounts} categories={categories} dictionary={d} action={editAction} state={editState} pending={editPending} onClose={() => setEditing(null)} />}
   </>;
+}
+
+function EditTransactionSheet({ event, accounts, categories, dictionary: d, action, state, pending, onClose }: {
+  event: LedgerEvent;
+  accounts: Account[];
+  categories: Category[];
+  dictionary: Dictionary;
+  action: (payload: FormData) => void;
+  state: ActionState;
+  pending: boolean;
+  onClose: () => void;
+}) {
+  const entry = event.entries[0];
+  if (!entry) return null;
+  const eventType = event.event_type as "expense" | "income" | "balance_adjustment";
+  const eligibleAccounts = eligibleAccountsForEventEdit(accounts, eventType, entry.currency);
+  const currentAccountMissing = !eligibleAccounts.some((account) => account.id === entry.account_id);
+  const eligibleCategories = categories.filter((category) => category.kind === event.event_type);
+  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="edit-transaction-title">
+    <div className="page-header"><h2 id="edit-transaction-title">{d.edit}</h2><button type="button" className="button secondary" onClick={onClose} aria-label={d.cancel}><X size={17} /></button></div>
+    <form action={action}>
+      <input type="hidden" name="id" value={event.id} />
+      <input type="hidden" name="expectedUpdatedAt" value={event.updated_at} />
+      {eventType === "balance_adjustment" && <input type="hidden" name="categoryId" value="" />}
+      <div className="form-grid">
+        <div className="field"><label>{d.amount}</label><input className="input" name="amount" inputMode="decimal" defaultValue={eventType === "balance_adjustment" ? new Decimal(entry.amount).toFixed() : new Decimal(entry.amount).abs().toFixed()} required /></div>
+        <div className="field"><label>{d.account}</label><select className="input" name="accountId" defaultValue={entry.account_id} required>
+          {currentAccountMissing && <option value={entry.account_id}>{entry.account?.name ?? d.account} · {entry.currency}</option>}
+          {eligibleAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>)}
+        </select></div>
+        {eventType !== "balance_adjustment" && <div className="field"><label>{d.category}</label><select className="input" name="categoryId" defaultValue={entry.category_id ?? ""} required>{eligibleCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>}
+        <div className="field"><label>{d.date}</label><input className="input" name="effectiveDate" type="date" defaultValue={event.effective_date} required /></div>
+        <div className="field" style={{ gridColumn: "1 / -1" }}><label>{d.description}</label><input className="input" name="description" defaultValue={event.description ?? ""} maxLength={500} /></div>
+      </div>
+      <p aria-live="polite" className={state.ok ? "positive" : "form-error"}>{state.message}</p><div className="form-actions"><button className="button" disabled={pending}>{pending ? "…" : d.save}</button></div>
+    </form>
+  </section></div>;
 }
