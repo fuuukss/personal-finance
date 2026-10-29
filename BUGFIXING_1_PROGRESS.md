@@ -23,11 +23,12 @@ Phase 5 — Awaiting production migration authorization. Application work for Ph
 - Added onboarding pending/error handling, duplicate-submit prevention, idempotency verification, automatic dashboard navigation, and success confirmation.
 - Confirmed `.env.local` is ignored and untracked without displaying its values.
 - Confirmed the public repository source and production browser bundle contain no detected secrets.
-- Started a Docker-backed isolated Supabase stack, applied the full migration chain locally, and passed all 27 pgTAP finance/RLS checks. The synthetic tests ran transactionally and did not touch production data.
+- Started a Docker-backed isolated Supabase stack, applied the full migration chain locally, and passed all 30 pgTAP finance/RLS checks. The synthetic tests ran transactionally and did not touch production data.
+- Hardened `update_financial_event_v2` so expense/income edits require an active owner category of the matching kind; balance adjustments preserve the existing optional-category behavior.
 
 ## Partially completed requirements
 
-- Expense account editing: application code and the 11-check pgTAP financial regression test pass in an isolated local Supabase stack; only the explicitly approved production migration and post-migration verification remain.
+- Expense account editing: application code and the 14-check pgTAP financial regression test pass in an isolated local Supabase stack; only the explicitly approved production migration and post-migration verification remain.
 - EUR Savings selector: application filtering is fixed and unit-tested; the existing production account row still needs a private read-only active/archived status check after deployment.
 - Navigation performance: private queries are request-deduplicated, route payloads are bounded by period, links prefetch normally, charts remain route-scoped, and pending/loading feedback is immediate. Comparable authenticated before/after timing has not been measured because no test credential/session may be embedded or logged.
 - Mobile verification: automated Desktop Chrome and emulated iPhone tests pass; physical iPhone 17/Safari/standalone PWA testing has not occurred.
@@ -61,7 +62,7 @@ Phase 5 — Awaiting production migration authorization. Application work for Ph
 - Secret scan: passed across 101 repository files.
 - Production dependency audit: no known vulnerabilities.
 - Frankfurter connectivity: live EUR/RSD current and date-range endpoints previously responded successfully from the development machine.
-- Supabase isolated pgTAP suite: 27 passed across 2 SQL files (11 financial checks and 16 RLS/schema checks).
+- Supabase isolated pgTAP suite: 30 passed across 2 SQL files (14 financial checks and 16 RLS/schema checks), including both category-mismatch directions and category-free balance adjustment.
 - Supabase migration dry-run: repeated after the isolated tests; exactly `202610290001_atomic_event_account_edit.sql` remains pending and nothing was applied.
 - Supabase remote database lint: completed with no error and one pre-existing warning in `public.create_transfer` about an explicit text-to-enum assignment cast.
 - Supabase local stack: stopped cleanly after testing; its retained local volume contains no committed or production data.
@@ -78,7 +79,7 @@ Phase 5 — Awaiting production migration authorization. Application work for Ph
 ## Git state
 
 - Current branch: `codex/bugfixing-1`
-- Latest verified implementation/test commit: `4cc91ef`
+- Latest verified implementation/test commit: `7ea4380`
 - Mobile/report implementation commit: `245e11f`
 - Previous Phase 1 commits: `d98165f`, `992358a`
 - Deployment status: production remains on the previously verified `main` (`2ab5c8e`); the development branch has not been pushed or deployed.
