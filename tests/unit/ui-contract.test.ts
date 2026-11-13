@@ -39,6 +39,7 @@ describe("Bugfixing #1 mobile UI contract", () => {
     expect(statistics).toContain("yearlyView");
     expect(statistics).toContain("monthlyView");
     expect(statistics).toContain('<details className="report-export">');
+    expect(statistics.indexOf("<CategoryChart")).toBeLessThan(statistics.indexOf("<CashFlowChart"));
   });
 
   it("prevents duplicate onboarding submission and confirms completion on the dashboard", () => {

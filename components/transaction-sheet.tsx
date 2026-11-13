@@ -40,7 +40,7 @@ export function TransactionSheet({ accounts, categories, dictionary: d, language
       </form> : <form action={eventAction} style={{ marginTop: "1rem" }}>
         <input type="hidden" name="eventType" value={kind} /><input type="hidden" name="idempotencyKey" value={idempotencyKey} />
         <div className="form-grid">
-          <Field label={d.amount}><MoneyInput name="amount" language={language} autoFocus placeholder={language === "sr-Latn" ? "0,00" : "0.00"} required /></Field>
+          <Field label={d.amount}><MoneyInput name="amount" language={language} autoFocus placeholder="0.00" required /></Field>
           <Field label={d.category}><select className="input" name="categoryId" required>{filteredCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label={d.account}><select className="input" name="accountId" required>{eligibleAccounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
           <Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field>
@@ -79,8 +79,8 @@ function TransferFields({ accounts, dictionary: d, language, today }: { accounts
   return <div className="form-grid">
     <Field label={d.sourceAccount}><select className="input" name="sourceAccountId" required value={sourceId} onChange={(e) => { setHint(""); setSourceId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
     <Field label={d.destinationAccount}><select className="input" name="destinationAccountId" required value={destinationId} onChange={(e) => { setHint(""); setDestinationId(e.target.value); }}>{accounts.map((a) => <option key={a.id} value={a.id}>{displayAccountName(a.name, language)} · {a.currency}</option>)}</select></Field>
-    <Field label={d.sourceAmount}><MoneyInput name="sourceAmount" language={language} placeholder={language === "sr-Latn" ? "0,00" : "0.00"} required value={sourceAmount} onValueChange={(value) => { setHint(""); setSourceAmount(value); }} /></Field>
-    <Field label={d.receivedAmount}><MoneyInput name="destinationAmount" language={language} placeholder={language === "sr-Latn" ? "0,00" : "0.00"} required value={destinationAmount} onValueChange={setDestinationAmount} /></Field>
+    <Field label={d.sourceAmount}><MoneyInput name="sourceAmount" language={language} placeholder="0.00" required value={sourceAmount} onValueChange={(value) => { setHint(""); setSourceAmount(value); }} /></Field>
+    <Field label={d.receivedAmount}><MoneyInput name="destinationAmount" language={language} placeholder="0.00" required value={destinationAmount} onValueChange={setDestinationAmount} /></Field>
     {hint && <p className="muted" style={{ gridColumn: "1 / -1", fontSize: ".78rem", margin: 0 }}>{hint}</p>}
     <Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field>
     <Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field>

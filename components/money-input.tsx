@@ -8,7 +8,7 @@ import {
   formatNormalizedMoneyInput,
   moneyInputSeparators,
   moneyInputSubmissionValue,
-  normalizeMoneyInput,
+  normalizeMoneyInputEdit,
 } from "@/lib/finance/money-input";
 
 interface MoneyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "defaultValue" | "name" | "onChange" | "type" | "value"> {
@@ -34,7 +34,7 @@ export function MoneyInput({
   const controlled = value !== undefined;
   const [internalValue, setInternalValue] = useState(() => canonicalMoneyInputValue(defaultValue, language, allowNegative));
   const normalized = controlled ? canonicalMoneyInputValue(value, language, allowNegative) : internalValue;
-  const displayValue = formatNormalizedMoneyInput(normalized, language);
+  const displayValue = formatNormalizedMoneyInput(normalized);
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingCaret = useRef<number | "end" | null>(null);
 
@@ -42,14 +42,17 @@ export function MoneyInput({
     if (pendingCaret.current === null || !inputRef.current) return;
     const position = pendingCaret.current === "end"
       ? inputRef.current.value.length
-      : caretForSemanticPosition(inputRef.current.value, pendingCaret.current, language);
+      : caretForSemanticPosition(inputRef.current.value, pendingCaret.current);
     inputRef.current.setSelectionRange(position, position);
     pendingCaret.current = null;
   }, [displayValue, language]);
 
   function commit(nextDisplay: string, caret: number, wasAtEnd = false) {
-    const semanticPosition = semanticPositionAt(nextDisplay, caret, language);
-    const nextValue = normalizeMoneyInput(nextDisplay, language, allowNegative);
+    const insertedComma = nextDisplay[caret - 1] === ","
+      && nextDisplay.length === displayValue.length + 1
+      && `${nextDisplay.slice(0, caret - 1)}${nextDisplay.slice(caret)}` === displayValue;
+    const semanticPosition = semanticPositionAt(nextDisplay, caret) + (insertedComma ? 1 : 0);
+    const nextValue = normalizeMoneyInputEdit(nextDisplay, displayValue, normalized, language, allowNegative);
     pendingCaret.current = wasAtEnd ? "end" : semanticPosition;
     if (!controlled) setInternalValue(nextValue);
     onValueChange?.(nextValue);
@@ -58,7 +61,7 @@ export function MoneyInput({
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.currentTarget.selectionStart !== event.currentTarget.selectionEnd) return;
     const position = event.currentTarget.selectionStart ?? 0;
-    const { group } = moneyInputSeparators(language);
+    const { group } = moneyInputSeparators();
     if (event.key === "Backspace" && position > 1 && displayValue[position - 1] === group) {
       event.preventDefault();
       const deleteAt = position - 2;
@@ -89,14 +92,14 @@ export function MoneyInput({
   </>;
 }
 
-function semanticPositionAt(value: string, caret: number, language: Language) {
-  const { decimal } = moneyInputSeparators(language);
+function semanticPositionAt(value: string, caret: number) {
+  const { decimal } = moneyInputSeparators();
   return [...value.slice(0, caret)].filter((character) => /\d/.test(character) || character === decimal || character === "-").length;
 }
 
-function caretForSemanticPosition(value: string, semanticPosition: number, language: Language) {
+function caretForSemanticPosition(value: string, semanticPosition: number) {
   if (semanticPosition <= 0) return 0;
-  const { decimal } = moneyInputSeparators(language);
+  const { decimal } = moneyInputSeparators();
   let seen = 0;
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];

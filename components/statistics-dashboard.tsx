@@ -85,8 +85,8 @@ export function StatisticsDashboard({ months, categories, investmentMonths, inve
     </section>
 
     <div className="report-grid">
-      {view === "year" && <CashFlowChart months={localizedMonths} currency={currency} language={language} locale={locale} dictionary={d} />}
       <CategoryChart categories={categories} total={categoryTotal} currency={currency} language={language} dictionary={d} />
+      {view === "year" && <CashFlowChart months={localizedMonths} currency={currency} language={language} locale={locale} dictionary={d} />}
       {view === "year" && <ChartCard title={d.netWorthChange}><ResponsiveContainer width="100%" height="100%"><LineChart data={localizedMonths}><CartesianGrid stroke="#252c35" vertical={false} /><XAxis dataKey="label" stroke="#7c8796" fontSize={11} /><YAxis stroke="#7c8796" width={52} tickFormatter={(value) => compactNumber(Number(value), locale)} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /><Line type="monotone" dataKey="netWorth" stroke="#6e97ff" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></ChartCard>}
       {view === "year" && investmentChart.some((item) => item.value !== 0) && <ChartCard title={d.investmentHistory}><ResponsiveContainer width="100%" height="100%"><LineChart data={investmentChart}><CartesianGrid stroke="#252c35" vertical={false} /><XAxis dataKey="label" stroke="#7c8796" fontSize={11} /><YAxis stroke="#7c8796" width={52} tickFormatter={(value) => compactNumber(Number(value), locale)} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /><Line type="monotone" dataKey="value" stroke="#b196ff" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></ChartCard>}
     </div>
