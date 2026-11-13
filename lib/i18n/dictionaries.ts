@@ -29,7 +29,7 @@ const sr = {
   incomeType: "Prihod", balanceAdjustment: "Korekcija stanja", investment: "Investicija", currentValue: "Trenutna vrednost",
   currentBalance: "Trenutno stanje", valuationDate: "Datum procene", updateValue: "Ažuriraj vrednost", targetBalance: "Ciljno stanje", accountHistory: "Istorija računa", removeAccount: "Ukloni račun", removeAccountHint: "Prazan račun se trajno briše. Račun samo sa početnim stanjem se arhivira i čuva istoriju. Računi sa transakcijama, transferima ili procenama ostaju zaštićeni.",
   exportPdf: "Izvezi PDF", search: "Pretraži transakcije", delete: "Obriši", edit: "Izmeni", confirmDelete: "Ova radnja se ne može poništiti.", cancel: "Otkaži",
-  month: "Mesec", year: "Godina", show: "Prikaži", previous: "Prethodni period", next: "Sledeći period", transactionType: "Vrsta transakcije", allTypes: "Sve", completeHistory: "Cela istorija", total: "Ukupno"
+  month: "Mesec", year: "Godina", show: "Prikaži", showMore: "Prikaži još", previous: "Prethodni period", next: "Sledeći period", transactionType: "Vrsta transakcije", allTypes: "Sve", completeHistory: "Cela istorija", total: "Ukupno"
 } as const;
 
 const en: Record<keyof typeof sr, string> = {
@@ -61,7 +61,7 @@ const en: Record<keyof typeof sr, string> = {
   incomeType: "Income", balanceAdjustment: "Balance adjustment", investment: "Investment", currentValue: "Current value",
   currentBalance: "Current balance", valuationDate: "Valuation date", updateValue: "Update value", targetBalance: "Target balance", accountHistory: "Account history", removeAccount: "Remove account", removeAccountHint: "An empty account is permanently deleted. An opening-balance-only account is archived with history preserved. Accounts with transactions, transfers, or valuations remain protected.",
   exportPdf: "Export PDF", search: "Search transactions", delete: "Delete", edit: "Edit", confirmDelete: "This action cannot be undone.", cancel: "Cancel",
-  month: "Month", year: "Year", show: "Show", previous: "Previous period", next: "Next period", transactionType: "Transaction type", allTypes: "All", completeHistory: "Complete history", total: "Total"
+  month: "Month", year: "Year", show: "Show", showMore: "Show more", previous: "Previous period", next: "Next period", transactionType: "Transaction type", allTypes: "All", completeHistory: "Complete history", total: "Total"
 };
 
 export const dictionaries = { "sr-Latn": sr, en };

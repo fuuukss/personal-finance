@@ -7,6 +7,7 @@ import { CompactAccountList } from "@/components/compact-account-list";
 import type { Account } from "@/lib/finance/types";
 import { partitionAccounts } from "@/lib/finance/account-management";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
+import { MoneyInput } from "@/components/money-input";
 
 const initial: ActionState = { ok: false, message: "" };
 
@@ -29,7 +30,7 @@ export function AccountsManager({ accounts, language, dictionary: d, notice = ""
         <Field label={d.name}><input className="input" name="name" required maxLength={80} /></Field>
         <Field label={d.currency}><select className="input" name="currency"><option>RSD</option><option>EUR</option><option>USD</option></select></Field>
         <Field label={d.accountType}><select className="input" name="kind"><option value="cash">{d.cash}</option><option value="bank">{d.bank}</option><option value="savings">{d.savings}</option><option value="investment">{d.investment}</option></select></Field>
-        <Field label={d.openingBalance}><input className="input" name="openingBalance" inputMode="decimal" defaultValue="0" required /></Field>
+        <Field label={d.openingBalance}><MoneyInput name="openingBalance" language={language} defaultValue="0" allowNegative required /></Field>
         <Field label={d.startDate}><input className="input" name="startDate" type="date" defaultValue={today} required /></Field>
       </div>
       <Footer state={accountState} pending={accountPending} label={d.save} />

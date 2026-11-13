@@ -1,12 +1,9 @@
 import Link from "next/link";
-import Decimal from "decimal.js";
-import { getAccounts, getCategories, getEvents, getReportReferenceData, getSettings } from "@/lib/data";
+import { getAccounts, getCategories, getEvents, getReportRates, getSettings } from "@/lib/data";
 import { getDictionary } from "@/lib/i18n/server";
-import { TransactionList } from "@/components/transaction-list";
 import { buildMonthlyReport } from "@/lib/finance/reports";
 import { formatMoney } from "@/lib/finance/money";
-
-type KindFilter = "expense" | "income" | "all";
+import { TransactionsExplorer, type TransactionKindFilter } from "@/components/transactions-explorer";
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ kind?: string; year?: string; month?: string; all?: string }> }) {
   const query = await searchParams;
@@ -15,7 +12,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const requestedMonth = Number(query.month);
   const year = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= 2200 ? requestedYear : today.getFullYear();
   const month = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : today.getMonth() + 1;
-  const kind: KindFilter = query.kind === "expense" || query.kind === "income" ? query.kind : "all";
+  const kind: TransactionKindFilter = query.kind === "expense" || query.kind === "income" ? query.kind : "all";
   const showAll = query.all === "1";
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextDate = new Date(Date.UTC(year, month, 1));
@@ -23,13 +20,13 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const [{ language, dictionary: d }, events, accounts, categories, settings] = await Promise.all([
     getDictionary(), showAll ? getEvents(5000) : getEvents(5000, start, end), getAccounts(), getCategories(), getSettings()
   ]);
-  const visibleEvents = kind === "all" ? events : events.filter((event) => event.event_type === kind);
   const currency = settings?.display_currency ?? "RSD";
-  const eventCurrencies = [...new Set(visibleEvents.flatMap((event) => event.entries.map((entry) => entry.currency)))];
-  const { rates } = await getReportReferenceData(currency, eventCurrencies, year);
-  const report = buildMonthlyReport(visibleEvents, rates, currency, year);
+  const eventCurrencies = [...new Set(events.flatMap((event) => event.entries.map((entry) => entry.currency)))];
+  const rates = await getReportRates(currency, eventCurrencies, year);
+  const report = buildMonthlyReport(events, rates, currency, year);
+  const expenseReport = buildMonthlyReport(events.filter((event) => event.event_type === "expense"), rates, currency, year);
+  const incomeReport = buildMonthlyReport(events.filter((event) => event.event_type === "income"), rates, currency, year);
   const selected = report.months[month - 1]!;
-  const total = kind === "expense" ? new Decimal(selected.expenses) : kind === "income" ? new Decimal(selected.income) : null;
   const locale = language === "sr-Latn" ? "sr-Latn-RS" : "en-US";
   const periodLabel = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(Date.UTC(year, month - 1, 1)));
   const previous = new Date(Date.UTC(year, month - 2, 1));
@@ -48,14 +45,19 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       </form>
       <Link className="button secondary compact-button" href={periodHref(following)} aria-label={d.next}>›</Link>
     </div>
-    <nav className="filter-tabs" aria-label={d.transactionType}>
-      <Link className={kind === "all" && !showAll ? "active" : ""} href={periodHref(new Date(Date.UTC(year, month - 1, 1)), "all")}>{d.allTypes}</Link>
-      <Link className={kind === "expense" && !showAll ? "active" : ""} href={periodHref(new Date(Date.UTC(year, month - 1, 1)), "expense")}>{d.expenses}</Link>
-      <Link className={kind === "income" && !showAll ? "active" : ""} href={periodHref(new Date(Date.UTC(year, month - 1, 1)), "income")}>{d.income}</Link>
-      <Link className={showAll ? "active" : ""} href="/transactions?all=1">{d.completeHistory}</Link>
-    </nav>
-    {total && <section className="card period-total"><span>{d.total}</span><strong className="amount">{formatMoney(total, currency, language)}</strong></section>}
-    {report.missing.length > 0 && <div className="card compact-warning">{d.incompleteMonthlySummary} {d.missingRates}: {report.missing.join(", ")}.</div>}
-    <TransactionList events={visibleEvents} accounts={accounts} categories={categories} language={language} dictionary={d} searchable />
+    <TransactionsExplorer
+      key={`${showAll ? "history" : "period"}-${year}-${month}-${kind}`}
+      events={events}
+      accounts={accounts}
+      categories={categories}
+      language={language}
+      dictionary={d}
+      initialKind={kind}
+      showAll={showAll}
+      year={year}
+      month={month}
+      totals={{ expense: formatMoney(selected.expenses, currency, language), income: formatMoney(selected.income, currency, language) }}
+      missingRates={{ all: report.missing, expense: expenseReport.missing, income: incomeReport.missing }}
+    />
   </main>;
 }

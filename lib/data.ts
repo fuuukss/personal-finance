@@ -22,6 +22,10 @@ const getCachedReferenceRateSeries = unstable_cache(
 
 type RawAccount = Omit<Account, "balance">;
 
+function withEmptyBalance(account: RawAccount): Account {
+  return { ...account, balance: "0" };
+}
+
 export const getSettings = cache(async function getSettings() {
   const { supabase, user } = await requireOwner();
   const { data } = await supabase.from("user_settings").select("*").eq("owner_id", user.id).maybeSingle();
@@ -48,6 +52,38 @@ export const getAccounts = cache(async function getAccounts(includeArchived = fa
     latest_valuation: latestValuations.get(account.id)?.amount ?? null,
     valuation_date: latestValuations.get(account.id)?.date ?? null
   }));
+});
+
+export const getAccountOptions = cache(async function getAccountOptions(): Promise<Account[]> {
+  const { supabase } = await requireOwner();
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("id,name,currency,kind,sort_order,archived_at")
+    .is("archived_at", null)
+    .order("sort_order");
+  if (error) throw new Error("Unable to load account options.");
+  return ((data ?? []) as RawAccount[]).map(withEmptyBalance);
+});
+
+export const getAccount = cache(async function getAccount(id: string): Promise<Account | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const { supabase } = await requireOwner();
+  const [{ data: rawAccount, error: accountError }, { data: entries, error: entriesError }, { data: valuations, error: valuationsError }] = await Promise.all([
+    supabase.from("accounts").select("id,name,currency,kind,sort_order,archived_at").eq("id", id).maybeSingle(),
+    supabase.from("ledger_entries").select("amount").eq("account_id", id),
+    supabase.from("investment_valuations").select("amount,valuation_date").eq("account_id", id).order("valuation_date", { ascending: false }).limit(1),
+  ]);
+  if (accountError || entriesError || valuationsError) throw new Error("Unable to load account.");
+  if (!rawAccount) return null;
+  const account = withEmptyBalance(rawAccount as RawAccount);
+  const balance = (entries ?? []).reduce((total, entry) => total.plus(entry.amount), new Decimal(0));
+  const latest = valuations?.[0];
+  return {
+    ...account,
+    balance: balance.toFixed(),
+    latest_valuation: latest?.amount ?? null,
+    valuation_date: latest?.valuation_date ?? null,
+  };
 });
 
 export const getAccountRemovalStrategy = cache(async function getAccountRemovalStrategy(accountId: string): Promise<AccountRemovalStrategy> {
@@ -137,13 +173,17 @@ export async function getExchangeRates(displayCurrency: string, baseCurrencies: 
   return latest;
 }
 
-export async function getReportReferenceData(displayCurrency: string, baseCurrencies: string[] = [], year?: number) {
-  const { supabase } = await requireOwner();
-  const [{ data: rates }, { data: valuations }] = await Promise.all([
-    supabase.from("exchange_rates").select("base_currency,quote_currency,rate,rate_date,source,is_actual").or(`quote_currency.eq.${displayCurrency},base_currency.eq.${displayCurrency}`).order("rate_date", { ascending: true }),
-    supabase.from("investment_valuations").select("account_id,amount,currency,valuation_date").order("valuation_date", { ascending: true })
-  ]);
-  const combinedRates = (rates ?? []).map((rate) => rate.quote_currency === displayCurrency ? rate : ({
+interface ReportRateRow {
+  base_currency: string;
+  quote_currency: string;
+  rate: string;
+  rate_date: string;
+  source: string;
+  is_actual: boolean;
+}
+
+async function combineReportRates(rates: ReportRateRow[], displayCurrency: string, baseCurrencies: string[], year: number | undefined) {
+  const combinedRates = rates.map((rate) => rate.quote_currency === displayCurrency ? rate : ({
     ...rate,
     base_currency: rate.quote_currency,
     quote_currency: displayCurrency,
@@ -155,7 +195,6 @@ export async function getReportReferenceData(displayCurrency: string, baseCurren
     const to = year === currentYear ? new Date().toISOString().slice(0, 10) : `${year}-12-31`;
     const currencies = [...new Set([
       ...baseCurrencies,
-      ...(valuations ?? []).map((valuation) => valuation.currency),
     ].map((currency) => currency.toUpperCase()).filter((currency) => currency !== displayCurrency))];
     const referenceSeries = await Promise.allSettled(currencies.map((currency) => getCachedReferenceRateSeries(currency, displayCurrency, from, to, process.env.EXCHANGE_RATE_API_URL)));
     for (const result of referenceSeries) {
@@ -171,5 +210,26 @@ export async function getReportReferenceData(displayCurrency: string, baseCurren
     }
   }
   combinedRates.sort((a, b) => a.rate_date.localeCompare(b.rate_date) || Number(a.is_actual) - Number(b.is_actual));
+  return combinedRates;
+}
+
+async function loadReportRates(displayCurrency: string, baseCurrencies: string[], year: number | undefined) {
+  const { supabase } = await requireOwner();
+  const { data: rates } = await supabase.from("exchange_rates").select("base_currency,quote_currency,rate,rate_date,source,is_actual").or(`quote_currency.eq.${displayCurrency},base_currency.eq.${displayCurrency}`).order("rate_date", { ascending: true });
+  return combineReportRates((rates ?? []) as ReportRateRow[], displayCurrency, baseCurrencies, year);
+}
+
+export const getReportRates = cache(async function getReportRates(displayCurrency: string, baseCurrencies: string[] = [], year?: number) {
+  return loadReportRates(displayCurrency, baseCurrencies, year);
+});
+
+export async function getReportReferenceData(displayCurrency: string, baseCurrencies: string[] = [], year?: number) {
+  const { supabase } = await requireOwner();
+  const [{ data: rates }, { data: valuations }] = await Promise.all([
+    supabase.from("exchange_rates").select("base_currency,quote_currency,rate,rate_date,source,is_actual").or(`quote_currency.eq.${displayCurrency},base_currency.eq.${displayCurrency}`).order("rate_date", { ascending: true }),
+    supabase.from("investment_valuations").select("account_id,amount,currency,valuation_date").order("valuation_date", { ascending: true }),
+  ]);
+  const valuationCurrencies = (valuations ?? []).map((valuation) => valuation.currency);
+  const combinedRates = await combineReportRates((rates ?? []) as ReportRateRow[], displayCurrency, [...baseCurrencies, ...valuationCurrencies], year);
   return { rates: combinedRates, valuations: valuations ?? [] };
 }

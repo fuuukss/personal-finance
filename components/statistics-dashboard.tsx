@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download } from "lucide-react";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 import { formatMoney } from "@/lib/finance/money";
+import { generateFinancialReportPdf } from "@/lib/finance/pdf-report";
+import { percentageOfTotal } from "@/lib/finance/reports";
 
 interface Month { label: string; income: number; expenses: number; balance: number; netWorth: number; }
 interface Category { name: string; color: string; value: number; }
@@ -28,8 +30,8 @@ export function StatisticsDashboard({ months, categories, investmentMonths, inve
   const locale = language === "sr-Latn" ? "sr-Latn-RS" : "en-US";
   const localizedMonths = useMemo(() => months.map((item, index) => ({
     ...item,
-    label: new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(Date.UTC(2026, index, 1))),
-  })), [months, locale]);
+    label: new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(Date.UTC(year, index, 1))),
+  })), [months, locale, year]);
   const selected = localizedMonths[month - 1]!;
   const annualIncome = localizedMonths.reduce((sum, item) => sum + item.income, 0);
   const annualExpenses = localizedMonths.reduce((sum, item) => sum + item.expenses, 0);
@@ -38,20 +40,28 @@ export function StatisticsDashboard({ months, categories, investmentMonths, inve
   const categoryTotal = categories.reduce((sum, category) => sum + category.value, 0);
   const investmentChart = investmentMonths.map((item, index) => ({ ...item, label: localizedMonths[index]?.label ?? String(item.month) }));
   const periodLabel = new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(Date.UTC(year, month - 1, 1)));
+  const reportPeriodLabel = view === "year" ? String(year) : periodLabel;
 
   async function exportPdf() {
     setExporting(true);
     try {
       const { jsPDF } = await import("jspdf");
       const pdf = new jsPDF();
-      pdf.setFontSize(20); pdf.text(`Saldo — ${year}`, 16, 20);
-      pdf.setFontSize(10); pdf.setTextColor(100); pdf.text(`Currency: ${currency} · Generated ${new Date().toLocaleDateString(locale)}`, 16, 29);
-      pdf.setTextColor(20); pdf.setFontSize(12); pdf.text("Monthly cash flow", 16, 42);
-      localizedMonths.forEach((item, index) => pdf.text(`${item.label}: income ${item.income.toFixed(2)}, expenses ${item.expenses.toFixed(2)}, balance ${item.balance.toFixed(2)}`, 18, 51 + index * 7));
-      let y = 143; pdf.text("Expense categories", 16, y); y += 9;
-      categories.slice(0, 12).forEach((category) => { pdf.text(`${category.name}: ${category.value.toFixed(2)} ${currency}`, 18, y); y += 7; });
-      if (missingRates.length) { pdf.setTextColor(180, 90, 20); pdf.text(`Incomplete: missing historical rates ${missingRates.join(", ")}`, 16, 270); }
-      pdf.save(`saldo-report-${year}-${currency}.pdf`);
+      const totalIncome = view === "year" ? annualIncome : selected.income;
+      const totalExpenses = view === "year" ? annualExpenses : selected.expenses;
+      generateFinancialReportPdf(pdf, {
+        periodLabel: reportPeriodLabel,
+        currency,
+        language,
+        generatedLabel: new Date().toLocaleDateString(locale),
+        months: localizedMonths,
+        categories,
+        totalIncome,
+        totalExpenses,
+        netCashFlow: totalIncome - totalExpenses,
+        missingRates,
+      });
+      pdf.save(`saldo-report-${view === "year" ? year : `${year}-${String(month).padStart(2, "0")}`}-${currency}.pdf`);
     } finally { setExporting(false); }
   }
 
@@ -75,7 +85,7 @@ export function StatisticsDashboard({ months, categories, investmentMonths, inve
     </section>
 
     <div className="report-grid">
-      {view === "year" && <ChartCard title={d.cashFlow}><ResponsiveContainer width="100%" height="100%"><BarChart data={localizedMonths}><CartesianGrid stroke="#252c35" vertical={false} /><XAxis dataKey="label" stroke="#7c8796" fontSize={11} /><YAxis stroke="#7c8796" width={52} tickFormatter={(value) => compactNumber(Number(value), locale)} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /><Bar dataKey="income" fill="#35c98b" radius={[4,4,0,0]} /><Bar dataKey="expenses" fill="#ff6b73" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></ChartCard>}
+      {view === "year" && <CashFlowChart months={localizedMonths} currency={currency} language={language} locale={locale} dictionary={d} />}
       <CategoryChart categories={categories} total={categoryTotal} currency={currency} language={language} dictionary={d} />
       {view === "year" && <ChartCard title={d.netWorthChange}><ResponsiveContainer width="100%" height="100%"><LineChart data={localizedMonths}><CartesianGrid stroke="#252c35" vertical={false} /><XAxis dataKey="label" stroke="#7c8796" fontSize={11} /><YAxis stroke="#7c8796" width={52} tickFormatter={(value) => compactNumber(Number(value), locale)} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /><Line type="monotone" dataKey="netWorth" stroke="#6e97ff" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></ChartCard>}
       {view === "year" && investmentChart.some((item) => item.value !== 0) && <ChartCard title={d.investmentHistory}><ResponsiveContainer width="100%" height="100%"><LineChart data={investmentChart}><CartesianGrid stroke="#252c35" vertical={false} /><XAxis dataKey="label" stroke="#7c8796" fontSize={11} /><YAxis stroke="#7c8796" width={52} tickFormatter={(value) => compactNumber(Number(value), locale)} /><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /><Line type="monotone" dataKey="value" stroke="#b196ff" strokeWidth={2.5} dot={false} /></LineChart></ResponsiveContainer></ChartCard>}
@@ -91,10 +101,29 @@ function compactNumber(value: number, locale: string) { return new Intl.NumberFo
 function Summary({ label, value, tone }: { label: string; value: string; tone: string }) { return <div className="card report-summary"><span>{label}</span><strong className={`amount ${tone}`}>{value}</strong></div>; }
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) { return <section className="card panel chart-card"><h2>{title}</h2><div className="chart-wrap">{children}</div></section>; }
 
+function CashFlowChart({ months, currency, language, locale, dictionary: d }: { months: Month[]; currency: string; language: Language; locale: string; dictionary: Dictionary }) {
+  const directionalMonths = months.map((item) => ({ ...item, expenseFlow: -item.expenses }));
+  return <ChartCard title={d.cashFlow}><ResponsiveContainer width="100%" height="100%"><LineChart data={directionalMonths} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+    <CartesianGrid stroke="#252c35" strokeDasharray="3 5" vertical={false} />
+    <XAxis dataKey="label" stroke="#7c8796" fontSize={11} tickLine={false} axisLine={{ stroke: "#394250" }} />
+    <YAxis stroke="#7c8796" width={52} tickLine={false} axisLine={false} tickFormatter={(value) => compactNumber(Number(value), locale)} />
+    <ReferenceLine y={0} stroke="#556172" strokeWidth={1.2} />
+    <Tooltip
+      cursor={{ stroke: "#475569", strokeWidth: 1 }}
+      contentStyle={tooltipStyle}
+      formatter={(value, name) => [formatMoney(Math.abs(Number(value ?? 0)), currency, language), name === "expenseFlow" ? d.expenses : d.income]}
+    />
+    <Line type="monotoneX" dataKey="income" stroke="#35c98b" strokeWidth={2.5} dot={{ r: 2.5, fill: "#35c98b", strokeWidth: 0 }} activeDot={{ r: 4 }} />
+    <Line type="monotoneX" dataKey="expenseFlow" stroke="#ff6b73" strokeWidth={2.5} dot={{ r: 2.5, fill: "#ff6b73", strokeWidth: 0 }} activeDot={{ r: 4 }} />
+  </LineChart></ResponsiveContainer></ChartCard>;
+}
+
 function CategoryChart({ categories, total, currency, language, dictionary: d }: { categories: Category[]; total: number; currency: string; language: Language; dictionary: Dictionary }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   if (categories.length === 0) return <section className="card panel chart-card"><h2>{d.spendingByCategory}</h2><div className="empty compact-empty">{d.noData}</div></section>;
+  const activeCategory = activeIndex === null ? null : categories[activeIndex] ?? null;
   return <section className="card panel chart-card category-chart-card"><h2>{d.spendingByCategory}</h2><div className="category-chart-layout">
-    <div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categories} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="84%" paddingAngle={categories.length > 1 ? 2 : 0} stroke="none">{categories.map((category) => <Cell key={category.name} fill={category.color} />)}</Pie><Tooltip contentStyle={tooltipStyle} formatter={(value) => formatMoney(Number(value ?? 0), currency, language)} /></PieChart></ResponsiveContainer><div className="donut-total"><span>{d.total}</span><strong>{formatMoney(total, currency, language)}</strong></div></div>
-    <div className="category-legend">{categories.map((category) => <div className="category-legend-row" key={category.name}><span className="category-dot" style={{ background: category.color }} /><span className="category-legend-name">{category.name}</span><span>{formatMoney(category.value, currency, language)}</span><small>{total > 0 ? `${((category.value / total) * 100).toFixed(1)}%` : "0%"}</small></div>)}</div>
+    <div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={categories} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="84%" paddingAngle={categories.length > 1 ? 2 : 0} stroke="none" onMouseEnter={(_, index) => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)} onClick={(_, index) => setActiveIndex(index)}>{categories.map((category) => <Cell key={category.name} fill={category.color} />)}</Pie></PieChart></ResponsiveContainer><div className="donut-total"><span title={activeCategory?.name}>{activeCategory?.name ?? d.total}</span><strong>{formatMoney(activeCategory?.value ?? total, currency, language)}</strong>{activeCategory && <small>{percentageOfTotal(activeCategory.value, total)}%</small>}</div></div>
+    <div className="category-legend">{categories.map((category) => <div className="category-legend-row" key={category.name}><span className="category-dot" style={{ background: category.color }} /><div className="category-legend-details"><span className="category-legend-name">{category.name}</span><small>{percentageOfTotal(category.value, total)}%</small></div><span className="category-legend-amount">{formatMoney(category.value, currency, language)}</span></div>)}</div>
   </div></section>;
 }

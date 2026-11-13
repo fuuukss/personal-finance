@@ -3,6 +3,12 @@ import type { LedgerEvent } from "@/lib/finance/types";
 
 interface RateRow { base_currency: string; quote_currency: string; rate: string; rate_date: string; }
 
+export function percentageOfTotal(value: Decimal.Value, total: Decimal.Value, decimalPlaces = 1) {
+  const denominator = new Decimal(total);
+  if (denominator.isZero()) return new Decimal(0).toFixed(decimalPlaces);
+  return new Decimal(value).div(denominator).mul(100).toDecimalPlaces(decimalPlaces, Decimal.ROUND_HALF_EVEN).toFixed(decimalPlaces);
+}
+
 function rateAt(rates: RateRow[], base: string, quote: string, date: string) {
   if (base === quote) return new Decimal(1);
   let selected: RateRow | undefined;

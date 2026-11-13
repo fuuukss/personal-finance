@@ -12,13 +12,16 @@ import { eligibleAccountsForEventEdit } from "@/lib/finance/account-eligibility"
 import { displayAccountName } from "@/lib/i18n/account-names";
 import { formatLocalDate } from "@/lib/i18n/format";
 import { displayEntryForEvent } from "@/lib/finance/transaction-display";
+import { MoneyInput } from "@/components/money-input";
 
 interface Category { id: string; name: string; kind: string; color: string; }
+const PAGE_SIZE = 100;
 
 export function TransactionList({ events, accounts, categories, language, dictionary: d, searchable = false, editable = true }: {
   events: LedgerEvent[]; accounts: Account[]; categories: Category[]; language: Language; dictionary: Dictionary; searchable?: boolean; editable?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [editing, setEditing] = useState<LedgerEvent | null>(null);
   const [pending, startTransition] = useTransition();
   const [editState, editAction, editPending] = useActionState(updateEventAction, { ok: false, message: "" } satisfies ActionState);
@@ -31,10 +34,11 @@ export function TransactionList({ events, accounts, categories, language, dictio
     const haystack = `${event.description ?? ""} ${event.entries.map((e) => `${e.account?.name ?? ""} ${e.category?.name ?? ""}`).join(" ")}`.toLowerCase();
     return haystack.includes(search.toLowerCase());
   }), [events, search]);
+  const visibleEvents = filtered.slice(0, visibleCount);
   return <>
-    {searchable && <div className="field" style={{ marginBottom: "1rem" }}><label htmlFor="search">{d.search}</label><div style={{ position: "relative" }}><Search size={17} style={{ position: "absolute", left: ".85rem", top: "1rem", color: "#788493" }} /><input id="search" className="input" style={{ paddingLeft: "2.6rem" }} value={search} onChange={(e) => setSearch(e.target.value)} /></div></div>}
+    {searchable && <div className="field" style={{ marginBottom: "1rem" }}><label htmlFor="search">{d.search}</label><div style={{ position: "relative" }}><Search size={17} style={{ position: "absolute", left: ".85rem", top: "1rem", color: "#788493" }} /><input id="search" className="input" style={{ paddingLeft: "2.6rem" }} value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(PAGE_SIZE); }} /></div></div>}
     <div className="card transaction-list">
-      {filtered.length === 0 ? <div className="empty">{d.noTransactions}</div> : filtered.map((event) => {
+      {filtered.length === 0 ? <div className="empty">{d.noTransactions}</div> : visibleEvents.map((event) => {
         const display = displayEntryForEvent(event);
         const entry = display?.entry;
         const Icon = eventIcons[event.event_type];
@@ -49,6 +53,7 @@ export function TransactionList({ events, accounts, categories, language, dictio
           <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}><span className={`amount ${isExpense ? "negative" : isIncome ? "positive" : ""}`}>{isExpense ? "−" : isIncome ? "+" : ""}{amount}</span>{editable && ["expense","income","balance_adjustment"].includes(event.event_type) && <button className="button secondary" aria-label={d.edit} onClick={() => setEditing(event)}><Pencil size={15} /></button>}{editable && event.event_type !== "opening_balance" && <button className="button secondary" disabled={pending} aria-label={d.delete} onClick={() => { if (confirm(d.confirmDelete)) startTransition(() => deleteEventAction(event.id)); }}><Trash2 size={15} /></button>}</div>
         </div>;
       })}
+      {visibleCount < filtered.length && <div className="transaction-load-more"><button className="button secondary" type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>{d.showMore}</button></div>}
     </div>
     {editing && <EditTransactionSheet event={editing} accounts={accounts} categories={categories} dictionary={d} language={language} action={editAction} state={editState} pending={editPending} onClose={() => setEditing(null)} />}
   </>;
@@ -78,7 +83,7 @@ function EditTransactionSheet({ event, accounts, categories, dictionary: d, lang
       <input type="hidden" name="expectedUpdatedAt" value={event.updated_at} />
       {eventType === "balance_adjustment" && <input type="hidden" name="categoryId" value="" />}
       <div className="form-grid">
-        <div className="field"><label>{d.amount}</label><input className="input" name="amount" inputMode="decimal" defaultValue={eventType === "balance_adjustment" ? new Decimal(entry.amount).toFixed() : new Decimal(entry.amount).abs().toFixed()} required /></div>
+        <div className="field"><label>{d.amount}</label><MoneyInput name="amount" language={language} allowNegative={eventType === "balance_adjustment"} defaultValue={eventType === "balance_adjustment" ? new Decimal(entry.amount).toFixed() : new Decimal(entry.amount).abs().toFixed()} required /></div>
         <div className="field"><label>{d.account}</label><select className="input" name="accountId" defaultValue={entry.account_id} required>
           {currentAccountMissing && <option value={entry.account_id}>{entry.account?.name ? displayAccountName(entry.account.name, language) : d.account} · {entry.currency}</option>}
           {eligibleAccounts.map((account) => <option key={account.id} value={account.id}>{displayAccountName(account.name, language)} · {account.currency}</option>)}

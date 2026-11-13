@@ -18,6 +18,7 @@ import type { AccountRemovalStrategy } from "@/lib/finance/account-management";
 import type { Dictionary, Language } from "@/lib/i18n/dictionaries";
 import { displayAccountName } from "@/lib/i18n/account-names";
 import { formatLocalDate } from "@/lib/i18n/format";
+import { MoneyInput } from "@/components/money-input";
 
 const initial: ActionState = { ok: false, message: "" };
 
@@ -70,7 +71,7 @@ export function AccountDetails({ account, accounts, events, categories, removalS
     {!isArchived && account.kind === "investment" && <section className="card account-action-card">
       <div className="account-action-heading"><TrendingUp size={18} /><h2>{d.updateValue}</h2></div>
       <form action={valuationAction}><input type="hidden" name="accountId" value={account.id} /><div className="form-grid compact-form-grid">
-        <Field label={`${d.amount} (${account.currency})`}><input className="input" name="amount" inputMode="decimal" defaultValue={account.latest_valuation ?? ""} required /></Field>
+        <Field label={`${d.amount} (${account.currency})`}><MoneyInput name="amount" language={language} defaultValue={account.latest_valuation ?? ""} required /></Field>
         <Field label={d.date}><input className="input" name="valuationDate" type="date" defaultValue={today} required /></Field>
         <Field label={`${d.description} (${d.optional})`}><input className="input" name="note" maxLength={500} /></Field>
       </div><Footer state={valuationState} pending={valuationPending} label={d.save} /></form>
@@ -81,7 +82,7 @@ export function AccountDetails({ account, accounts, events, categories, removalS
     </form></details>
 
     {!isArchived && <details className="card account-action-card"><summary><Scale size={17} />{d.balanceAdjustment}</summary><form action={adjustmentAction} className="details-form">
-      <input type="hidden" name="accountId" value={account.id} /><div className="form-grid compact-form-grid"><Field label={`${d.targetBalance} (${account.currency})`}><input className="input" name="targetBalance" inputMode="decimal" defaultValue={account.balance} required /></Field><Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field><Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field></div><Footer state={adjustmentState} pending={adjustmentPending} label={d.save} />
+      <input type="hidden" name="accountId" value={account.id} /><div className="form-grid compact-form-grid"><Field label={`${d.targetBalance} (${account.currency})`}><MoneyInput name="targetBalance" language={language} defaultValue={account.balance} allowNegative required /></Field><Field label={d.date}><input className="input" name="effectiveDate" type="date" defaultValue={today} required /></Field><Field label={`${d.description} (${d.optional})`}><input className="input" name="description" maxLength={500} /></Field></div><Footer state={adjustmentState} pending={adjustmentPending} label={d.save} />
     </form></details>}
 
     <div className="section-row compact-section-row"><h2>{d.accountHistory}</h2></div>
